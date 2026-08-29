@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#050505">
+
+  <title>BarberStylo | Agendamento</title>
+
+  <style>
+    *{
+      box-sizing:border-box;
+      margin:0;
+      padding:0;
+    }
+
+    body{
+      font-family:Arial, Helvetica, sans-serif;
+      background:#f4f4f4;
+      color:#111;
+      padding-bottom:85px;
+    }
+
+    button,input,select{
+      font-family:inherit;
+    }
+
+    header{
+      background:#050505;
+      color:#fff;
+      padding:15px 20px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      border-bottom:1px solid #222;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .brand img{
+      width:55px;
+      height:55px;
+      object-fit:cover;
+      border-radius:50%;
+      background:#000;
+    }
+
+    .brand strong{
+      display:block;
+      font-size:19px;
+    }
+
+    .brand small{
+      color:#aaa;
+    }
+
+    main{
+      max-width:1050px;
+      margin:auto;
+      padding:18px;
+    }
+
+    .hero{
+      background:#050505;
+      color:#fff;
+      border-radius:25px;
+      padding:35px 25px;
+      margin-bottom:18px;
+      overflow:hidden;
+    }
+
+    .hero-content{
+      max-width:600px;
+    }
+
+    .eyebrow{
+      font-size:11px;
+      font-weight:bold;
+      letter-spacing:2px;
+      color:#aaa;
+    }
+
+    h1{
+      font-size:46px;
+      line-height:1;
+      margin:12px 0;
+    }
+
+    h2{
+      font-size:28px;
+      margin-bottom:8px;
+    }
+
+    h3{
+      margin-bottom:10px;
+    }
+
+    .hero p{
+      color:#ccc;
+      line-height:1.5;
+      margin-bottom:20px;
+    }
+
+    .btn{
+      border:0;
+      border-radius:13px;
+      min-height:48px;
+      padding:0 18px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    .btn-primary{
+      background:#fff;
+      color:#000;
+    }
+
+    .btn-dark{
+      background:#111;
+      color:#fff;
+      width:100%;
+      margin-top:10px;
+    }
+
+    .card{
+      background:#fff;
+      padding:20px;
+      border:1px solid #ddd;
+      border-radius:18px;
+      margin-bottom:14px;
+    }
+
+    .info-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+
+    .info-grid p{
+      color:#666;
+      margin-top:5px;
+      line-height:1.5;
+    }
+
+    .step-number{
+      display:inline-flex;
+      width:30px;
+      height:30px;
+      background:#111;
+      color:#fff;
+      border-radius:50%;
+      align-items:center;
+      justify-content:center;
+      margin-right:8px;
+    }
+
+    label{
+      display:block;
+      font-weight:bold;
+      margin-top:14px;
+      margin-bottom:6px;
+    }
+
+    select,input{
+      width:100%;
+      min-height:48px;
+      border:1px solid #ccc;
+      border-radius:12px;
+      padding:0 12px;
+      background:#fff;
+      font-size:16px;
+    }
+
+    select:disabled,
+    input:disabled{
+      background:#eee;
+      color:#999;
+    }
+
+    .slots{
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:8px;
+      margin-top:12px;
+    }
+
+    .slot{
+      border:1px solid #ccc;
+      background:#fff;
+      border-radius:10px;
+      padding:12px 5px;
+      cursor:pointer;
+      font-weight:bold;
+    }
+
+    .slot.selected{
+      background:#111;
+      color:#fff;
+      border-color:#111;
+    }
+
+    .summary{
+      background:#111;
+      color:white;
+    }
+
+    .summary p{
+      margin:6px 0;
+      color:#ddd;
+    }
+
+    .summary strong{
+      color:#fff;
+    }
+
+    .message{
+      padding:12px;
+      border-radius:10px;
+      margin-top:12px;
+      display:none;
+    }
+
+    .message.error{
+      display:block;
+      background:#ffe7e7;
+      color:#8b1111;
+    }
+
+    .message.success{
+      display:block;
+      background:#e6f7e9;
+      color:#125920;
+    }
+
+    .loading{
+      color:#666;
+      padding:10px 0;
+      font-size:14px;
+    }
+
+    .section-title{
+      margin:28px 0 12px;
+    }
+
+    .future-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+
+    .future-card{
+      background:#fff;
+      border-radius:18px;
+      padding:20px;
+      border:1px solid #ddd;
+    }
+
+    .future-card span{
+      font-size:28px;
+    }
+
+    .future-card p{
+      color:#666;
+      margin-top:7px;
+    }
+
+    footer{
+      text-align:center;
+      color:#777;
+      font-size:13px;
+      padding:25px 10px;
+    }
+
+    .bottom-nav{
+      position:fixed;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:12px;
+      width:min(94%,600px);
+      background:#080808;
+      border-radius:20px;
+      padding:8px;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      box-shadow:0 15px 40px rgba(0,0,0,.3);
+    }
+
+    .bottom-nav button{
+      background:transparent;
+      border:0;
+      color:#aaa;
+      min-height:52px;
+      cursor:pointer;
+      border-radius:13px;
+    }
+
+    .bottom-nav button:hover{
+      background:#222;
+      color:#fff;
+    }
+
+    .bottom-nav span{
+      display:block;
+      font-size:19px;
+    }
+
+    .bottom-nav small{
+      font-size:10px;
+    }
+
+    @media(max-width:650px){
+      main{
+        padding:12px;
+      }
+
+      h1{
+        font-size:39px;
+      }
+
+      .hero{
+        padding:27px 20px;
+      }
+
+      .info-grid,
+      .future-grid{
+        grid-template-columns:1fr;
+      }
+
+      .slots{
+        grid-template-columns:repeat(3,1fr);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="brand">
+    <img src="logo.png" alt="Barbearia BarberStylo">
+    <div>
+      <strong>BarberStylo</strong>
+      <small>Barbearia</small>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero" id="inicio">
+    <div class="hero-content">
+      <span class="eyebrow">BARBEARIA BARBERSTYLO</span>
+
+      <h1>Seu estilo começa aqui.</h1>
+
+      <p>
+        Escolha seu barbeiro, serviço, data e horário.
+        Agende de forma rápida e prática.
+      </p>
+
+      <button
+        class="btn btn-primary"
+        onclick="document.getElementById('agendamento').scrollIntoView({behavior:'smooth'})">
+        Agendar horário
+      </button>
+    </div>
+  </section>
+
+  <section class="info-grid">
+
+    <div class="card">
+      <h3>📍 Onde estamos</h3>
+      <p>
+        Av. Cuiabá, 1193<br>
+        Jd. Esperança
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>🕘 Atendimento</h3>
+      <p>
+        Segunda a sábado<br>
+        9h às 20h
+      </p>
+
+      <p><strong>Domingo:</strong> sob disponibilidade.</p>
+    </div>
+
+  </section>
+
+  <section id="agendamento">
+
+    <div class="section-title">
+      <span class="eyebrow">AGENDE ONLINE</span>
+      <h2>Reserve seu horário</h2>
+    </div>
+
+    <div class="card">
+
+      <h3>
+        <span class="step-number">1</span>
+        Escolha o barbeiro
+      </h3>
+
+      <select id="barberSelect">
+        <option value="">Carregando barbeiros...</option>
+      </select>
+
+    </div>
+
+    <div class="card">
+
+      <h3>
+        <span class="step-number">2</span>
+        Escolha o serviço
+      </h3>
+
+      <select id="serviceSelect" disabled>
+        <option value="">Escolha primeiro o barbeiro</option>
+      </select>
+
+    </div>
+
+    <div class="card">
+
+      <h3>
+        <span class="step-number">3</span>
+        Escolha a data
+      </h3>
+
+      <input type="date" id="dateInput" disabled>
+
+      <div id="slotsMessage" class="loading"></div>
+
+      <div id="slots" class="slots"></div>
+
+    </div>
+
+    <div class="card">
+
+      <h3>
+        <span class="step-number">4</span>
+        Seus dados
+      </h3>
+
+      <label for="clientName">Nome</label>
+      <input
+        type="text"
+        id="clientName"
+        placeholder="Digite seu nome">
+
+      <label for="clientPhone">WhatsApp</label>
+      <input
+        type="tel"
+        id="clientPhone"
+        placeholder="(44) 99999-9999">
+
+    </div>
+
+    <div class="card summary" id="summary">
+
+      <h3>Resumo do agendamento</h3>
+
+      <p>
+        Barbeiro:
+        <strong id="summaryBarber">—</strong>
+      </p>
+
+      <p>
+        Serviço:
+        <strong id="summaryService">—</strong>
+      </p>
+
+      <p>
+        Valor:
+        <strong id="summaryPrice">—</strong>
+      </p>
+
+      <p>
+        Duração:
+        <strong id="summaryDuration">—</strong>
+      </p>
+
+      <p>
+        Data:
+        <strong id="summaryDate">—</strong>
+      </p>
+
+      <p>
+        Horário:
+        <strong id="summaryTime">—</strong>
+      </p>
+
+      <button
+        class="btn btn-primary"
+        style="width:100%;margin-top:15px"
+        id="confirmButton">
+        Confirmar agendamento
+      </button>
+
+      <div id="bookingMessage" class="message"></div>
+
+    </div>
+
+  </section>
+
+  <section id="produtos">
+
+    <div class="section-title">
+      <span class="eyebrow">BARBERSTYLO</span>
+      <h2>Mais na barbearia</h2>
+    </div>
+
+    <div class="future-grid">
+
+      <div class="future-card">
+        <span>🧴</span>
+        <h3>Produtos</h3>
+        <p>
+          Em breve você poderá consultar produtos de cabelo,
+          barba e cuidados pessoais disponíveis no salão.
+        </p>
+      </div>
+
+      <div class="future-card">
+        <span>👕</span>
+        <h3>Camisetas BarberStylo</h3>
+        <p>
+          Área preparada para a nova linha de camisetas
+          da BarberStylo.
+        </p>
+      </div>
+
+      <div class="future-card">
+        <span>🎫</span>
+        <h3>Pacotes mensais</h3>
+        <p>
+          Quando os planos mensais forem lançados,
+          você poderá acompanhar seus cortes por aqui.
+        </p>
+      </div>
+
+      <div class="future-card">
+        <span>✂️</span>
+        <h3>Seu barbeiro</h3>
+        <p>
+          Escolha Alan, Gleison ou Wesley e consulte
+          os horários disponíveis.
+        </p>
+      </div>
+
+    </div>
+
+  </section>
+
+</main>
+
+<footer>
+  © BarberStylo • Av. Cuiabá, 1193 - Jd. Esperança
+</footer>
+
+<nav class="bottom-nav">
+
+  <button onclick="document.getElementById('inicio').scrollIntoView({behavior:'smooth'})">
+    <span>⌂</span>
+    <small>Início</small>
+  </button>
+
+  <button onclick="document.getElementById('agendamento').scrollIntoView({behavior:'smooth'})">
+    <span>✂</span>
+    <small>Agendar</small>
+  </button>
+
+  <button onclick="document.getElementById('produtos').scrollIntoView({behavior:'smooth'})">
+    <span>▣</span>
+    <small>Produtos</small>
+  </button>
+
+  <button onclick="alert('A área do barbeiro será adicionada na próxima etapa.')">
+    <span>☻</span>
+    <small>Equipe</small>
+  </button>
+
+</nav>
+
+
+<script type="module">
+
+  import {
+    createClient
+  } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+
+  const SUPABASE_URL =
+    "https://tsokcgxjpdgewdgbpoae.supabase.co";
+
+
+  const SUPABASE_KEY =
+    "sb_publishable_5bMOEvfugnbsbo0sos-HJA_5qpGTn8-";
+
+
+  const supabase =
+    createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+
+  const barberSelect =
+    document.getElementById("barberSelect");
+
+  const serviceSelect =
+    document.getElementById("serviceSelect");
+
+  const dateInput =
+    document.getElementById("dateInput");
+
+  const slotsElement =
+    document.getElementById("slots");
+
+  const slotsMessage =
+    document.getElementById("slotsMessage");
+
+  const bookingMessage =
+    document.getElementById("bookingMessage");
+
+
+  let barbers = [];
+
+  let barberServices = [];
+
+  let selectedSlot = null;
+
+
+
+  function money(value){
+
+    return Number(value).toLocaleString(
+      "pt-BR",
+      {
+        style:"currency",
+        currency:"BRL"
+      }
+    );
+
+  }
+
+
+
+  function formatDate(value){
+
+    if(!value) return "—";
+
+    const parts = value.split("-");
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+
+  }
+
+
+
+  function selectedBarber(){
+
+    return barbers.find(
+      barber =>
+        String(barber.id) === barberSelect.value
+    );
+
+  }
+
+
+
+  function selectedService(){
+
+    return barberServices.find(
+      item =>
+        String(item.id) === serviceSelect.value
+    );
+
+  }
+
+
+
+  function updateSummary(){
+
+    const barber =
+      selectedBarber();
+
+    const service =
+      selectedService();
+
+
+    document.getElementById(
+      "summaryBarber"
+    ).textContent =
+      barber?.name || "—";
+
+
+    document.getElementById(
+      "summaryService"
+    ).textContent =
+      service?.services?.name || "—";
+
+
+    document.getElementById(
+      "summaryPrice"
+    ).textContent =
+      service
+        ? money(service.price)
+        : "—";
+
+
+    document.getElementById(
+      "summaryDuration"
+    ).textContent =
+      service
+        ? `${service.duration_minutes} min`
+        : "—";
+
+
+    document.getElementById(
+      "summaryDate"
+    ).textContent =
+      formatDate(dateInput.value);
+
+
+    document.getElementById(
+      "summaryTime"
+    ).textContent =
+      selectedSlot || "—";
+
+  }
+
+
+
+  async function loadBarbers(){
+
+    barberSelect.innerHTML =
+      `<option value="">Carregando...</option>`;
+
+
+    const {
+      data,
+      error
+    } =
+      await supabase.rpc(
+        "list_active_barbers"
+      );
+
+
+    if(error){
+
+      console.error(error);
+
+      barberSelect.innerHTML =
+        `<option value="">Não foi possível carregar</option>`;
+
+      return;
+
+    }
+
+
+    barbers = data || [];
+
+
+    barberSelect.innerHTML =
+      `<option value="">Selecione o barbeiro</option>`;
+
+
+    barbers.forEach(barber => {
+
+      const option =
+        document.createElement("option");
+
+      option.value =
+        barber.id;
+
+      option.textContent =
+        barber.name;
+
+      barberSelect.appendChild(option);
+
+    });
+
+  }
+
+
+
+  async function loadServices(){
+
+    serviceSelect.disabled =
+      true;
+
+    dateInput.disabled =
+      true;
+
+    selectedSlot =
+      null;
+
+    slotsElement.innerHTML =
+      "";
+
+    updateSummary();
+
+
+    if(!barberSelect.value){
+
+      serviceSelect.innerHTML =
+        `<option value="">Escolha primeiro o barbeiro</option>`;
+
+      return;
+
+    }
+
+
+    serviceSelect.innerHTML =
+      `<option value="">Carregando serviços...</option>`;
+
+
+    const {
+      data,
+      error
+    } =
+      await supabase
+        .from("barber_services")
+        .select(`
+          id,
+          price,
+          duration_minutes,
+          service_id,
+          services (
+            id,
+            name,
+            description
+          )
+        `)
+        .eq(
+          "barber_id",
+          barberSelect.value
+        )
+        .eq(
+          "active",
+          true
+        );
+
+
+    if(error){
+
+      console.error(error);
+
+      serviceSelect.innerHTML =
+        `<option value="">Erro ao carregar</option>`;
+
+      return;
+
+    }
+
+
+    barberServices =
+      data || [];
+
+
+    serviceSelect.innerHTML =
+      `<option value="">Selecione o serviço</option>`;
+
+
+    barberServices.forEach(item => {
+
+      const option =
+        document.createElement("option");
+
+      option.value =
+        item.id;
+
+      option.textContent =
+        `${item.services.name} • ${money(item.price)} • ${item.duration_minutes} min`;
+
+      serviceSelect.appendChild(option);
+
+    });
+
+
+    serviceSelect.disabled =
+      false;
+
+    updateSummary();
+
+  }
+
+
+
+  async function loadSlots(){
+
+    selectedSlot =
+      null;
+
+    slotsElement.innerHTML =
+      "";
+
+    updateSummary();
+
+
+    if(
+      !serviceSelect.value ||
+      !dateInput.value
+    ){
+
+      return;
+
+    }
+
+
+    slotsMessage.textContent =
+      "Consultando horários disponíveis...";
+
+
+    const {
+      data,
+      error
+    } =
+      await supabase.rpc(
+        "get_available_slots",
+        {
+          p_barber_service_id:
+            Number(serviceSelect.value),
+
+          p_date:
+            dateInput.value
+        }
+      );
+
+
+    slotsMessage.textContent =
+      "";
+
+
+    if(error){
+
+      console.error(error);
+
+      slotsMessage.textContent =
+        "Não foi possível consultar os horários.";
+
+      return;
+
+    }
+
+
+    if(!data?.length){
+
+      slotsMessage.textContent =
+        "Nenhum horário disponível para esta data.";
+
+      return;
+
+    }
+
+
+    data.forEach(item => {
+
+      const time =
+        item.slot_time.slice(0,5);
+
+
+      const button =
+        document.createElement("button");
+
+
+      button.type =
+        "button";
+
+
+      button.className =
+        "slot";
+
+
+      button.textContent =
+        time;
+
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          document
+            .querySelectorAll(".slot")
+            .forEach(
+              slot =>
+                slot.classList.remove("selected")
+            );
+
+
+          button.classList.add(
+            "selected"
+          );
+
+
+          selectedSlot =
+            time;
+
+
+          updateSummary();
+
+        }
+      );
+
+
+      slotsElement.appendChild(
+        button
+      );
+
+    });
+
+  }
+
+
+
+  barberSelect.addEventListener(
+    "change",
+    loadServices
+  );
+
+
+
+  serviceSelect.addEventListener(
+    "change",
+    () => {
+
+      selectedSlot =
+        null;
+
+      slotsElement.innerHTML =
+        "";
+
+      dateInput.disabled =
+        !serviceSelect.value;
+
+      updateSummary();
+
+      if(dateInput.value){
+        loadSlots();
+      }
+
+    }
+  );
+
+
+
+  dateInput.addEventListener(
+    "change",
+    loadSlots
+  );
+
+
+
+  document
+    .getElementById("confirmButton")
+    .addEventListener(
+      "click",
+      async () => {
+
+        bookingMessage.className =
+          "message";
+
+
+        const barber =
+          selectedBarber();
+
+
+        const service =
+          selectedService();
+
+
+        const clientName =
+          document
+            .getElementById("clientName")
+            .value
+            .trim();
+
+
+        const clientPhone =
+          document
+            .getElementById("clientPhone")
+            .value
+            .trim();
+
+
+        if(
+          !barber ||
+          !service ||
+          !dateInput.value ||
+          !selectedSlot ||
+          !clientName ||
+          !clientPhone
+        ){
+
+          bookingMessage.className =
+            "message error";
+
+
+          bookingMessage.textContent =
+            "Preencha todos os dados e escolha um horário.";
+
+          return;
+
+        }
+
+
+        const button =
+          document.getElementById(
+            "confirmButton"
+          );
+
+
+        button.disabled =
+          true;
+
+
+        button.textContent =
+          "Confirmando...";
+
+
+        const {
+          data,
+          error
+        } =
+          await supabase.rpc(
+            "create_appointment",
+            {
+              p_barber_service_id:
+                Number(service.id),
+
+              p_client_name:
+                clientName,
+
+              p_client_phone:
+                clientPhone,
+
+              p_date:
+                dateInput.value,
+
+              p_time:
+                selectedSlot
+            }
+          );
+
+
+        button.disabled =
+          false;
+
+
+        button.textContent =
+          "Confirmar agendamento";
+
+
+        if(error){
+
+          console.error(error);
+
+
+          bookingMessage.className =
+            "message error";
+
+
+          bookingMessage.textContent =
+            error.message.includes(
+              "ocupado"
+            )
+              ? "Este horário acabou de ser ocupado. Escolha outro horário."
+              : "Não foi possível realizar o agendamento.";
+
+          loadSlots();
+
+          return;
+
+        }
+
+
+        bookingMessage.className =
+          "message success";
+
+
+        bookingMessage.textContent =
+          "Agendamento registrado! Abrindo o WhatsApp do barbeiro...";
+
+
+        const whatsappText =
+`✂️ *NOVO AGENDAMENTO — BARBERSTYLO*
+
+👤 Cliente: ${clientName}
+📱 WhatsApp: ${clientPhone}
+💈 Barbeiro: ${barber.name}
+✂️ Serviço: ${service.services.name}
+💰 Valor: ${money(service.price)}
+📅 Data: ${formatDate(dateInput.value)}
+🕐 Horário: ${selectedSlot}
+⏱️ Duração: ${service.duration_minutes} minutos
+
+Gostaria de confirmar meu agendamento.`;
+
+
+        if(barber.phone){
+
+          const url =
+            `https://wa.me/${barber.phone}?text=${encodeURIComponent(whatsappText)}`;
+
+
+          setTimeout(
+            () => {
+
+              window.open(
+                url,
+                "_blank"
+              );
+
+            },
+            700
+          );
+
+        }
+
+
+        loadSlots();
+
+      }
+    );
+
+
+
+  const today =
+    new Date();
+
+
+  const minDate =
+    `${today.getFullYear()}-${String(
+      today.getMonth()+1
+    ).padStart(2,"0")}-${String(
+      today.getDate()
+    ).padStart(2,"0")}`;
+
+
+  dateInput.min =
+    minDate;
+
+
+  loadBarbers();
+
+</script>
+
+</body>
+</html>
