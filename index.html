@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#050505">
+  <meta name="application-name" content="BarberStylo">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="BarberStylo">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./logo.png">
+  <link rel="icon" href="./logo.png">
   <title>BarberStylo | Agendamento</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -52,6 +59,8 @@
     .restricted-panel{display:none;position:fixed;inset:0;z-index:2000;background:var(--bg);overflow:auto}
     .panel-header{background:var(--black);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5;border-bottom:1px solid #222}
     .panel-brand{display:flex;align-items:center;gap:12px}.panel-brand img{width:48px;height:48px;object-fit:contain}.panel-role{font-size:13px;color:#bbb}
+    .panel-header-actions{display:flex;align-items:center;gap:8px}
+    #installAppBtn{display:none;background:#fff;color:#000;border:0;border-radius:12px;min-height:42px;padding:0 14px;font-weight:700}
     .panel-shell{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
     .panel-menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px}
     .panel-card{background:#fff;border:1px solid #ddd;border-radius:18px;padding:20px;text-align:left;min-height:145px;transition:.15s}
@@ -192,7 +201,10 @@
       <img src="logo.png" alt="BarberStylo">
       <div><strong style="font-size:20px">BarberStylo</strong><div id="panelRole" class="panel-role">Área restrita</div></div>
     </div>
-    <button id="logoutBtn" class="btn btn-primary">Sair</button>
+    <div class="panel-header-actions">
+      <button id="installAppBtn" type="button">📱 Instalar app</button>
+      <button id="logoutBtn" class="btn btn-primary">Sair</button>
+    </div>
   </div>
 
   <div class="panel-shell">
@@ -511,6 +523,7 @@ Gostaria de confirmar meu agendamento.`;
 
   function openRestrictedPanel(profile){
     currentProfile = profile;
+    if(deferredInstallPrompt) document.getElementById("installAppBtn").style.display = "inline-flex";
     document.body.classList.add("panel-open");
     restrictedPanel.style.display = "block";
     panelContent.className = "panel-content";
@@ -991,13 +1004,54 @@ Gostaria de confirmar meu agendamento.`;
   const today = new Date();
   dateInput.min = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
 
+  let deferredInstallPrompt = null;
+  const installAppBtn = document.getElementById("installAppBtn");
+
+  window.addEventListener("beforeinstallprompt",(event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    if(currentProfile) installAppBtn.style.display = "inline-flex";
+  });
+
+  window.addEventListener("appinstalled",() => {
+    deferredInstallPrompt = null;
+    installAppBtn.style.display = "none";
+  });
+
+  installAppBtn.addEventListener("click",async() => {
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installAppBtn.style.display = "none";
+      return;
+    }
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if(isIOS){
+      alert('No iPhone: toque em "Compartilhar" e depois em "Adicionar à Tela de Início".');
+    }else{
+      alert("Para instalar, abra o menu do navegador e escolha a opção de instalar/adicionar o BarberStylo à tela inicial.");
+    }
+  });
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load",() => {
+      navigator.serviceWorker.register("./service-worker.js")
+        .catch(error => console.error("Erro ao registrar o aplicativo:",error));
+    });
+  }
+
   async function init(){
     await loadBarbers();
     const { data:{session} } = await supabase.auth.getSession();
     if(session){
       try{
         const profile = await getProfile();
-        if(profile) currentProfile = profile;
+        if(profile){
+          currentProfile = profile;
+          if(deferredInstallPrompt) installAppBtn.style.display = "inline-flex";
+        }
       }catch(error){ console.error(error); }
     }
   }
