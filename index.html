@@ -1188,17 +1188,29 @@
           "Agendamento registrado! Abrindo o WhatsApp do barbeiro...";
 
 
-        const whatsappText =
-`✂️ *NOVO AGENDAMENTO — BARBERSTYLO*
+const appointmentDate = new Date(
+  dateInput.value + "T12:00:00"
+);
 
-👤 Cliente: ${clientName}
-📱 WhatsApp: ${clientPhone}
-💈 Barbeiro: ${barber.name}
-✂️ Serviço: ${service.services.name}
-💰 Valor: ${money(service.price)}
-📅 Data: ${formatDate(dateInput.value)}
-🕐 Horário: ${selectedSlot}
-⏱️ Duração: ${service.duration_minutes} minutos
+const weekDay = appointmentDate.toLocaleDateString(
+  "pt-BR",
+  { weekday: "long" }
+);
+
+const weekDayFormatted =
+  weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
+
+const whatsappText =
+`*NOVO AGENDAMENTO - BARBERSTYLO*
+
+Cliente: ${clientName}
+WhatsApp: ${clientPhone}
+Barbeiro: ${barber.name}
+Serviço: ${service.services.name}
+Valor: ${money(service.price)}
+Data: ${weekDayFormatted}, ${formatDate(dateInput.value)}
+Horário: ${selectedSlot}
+Duração: ${service.duration_minutes} minutos
 
 Gostaria de confirmar meu agendamento.`;
 
