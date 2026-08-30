@@ -1306,6 +1306,201 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 </script>
+  <!-- PAINEL RESTRITO -->
+<section
+  id="restrictedPanel"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:2000;
+    background:#f4f4f4;
+    overflow:auto;
+  "
+>
+  <div style="
+    background:#050505;
+    color:#fff;
+    padding:18px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  ">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img
+        src="logo.png"
+        alt="BarberStylo"
+        style="width:48px;height:48px;object-fit:contain;"
+      >
+
+      <div>
+        <strong style="font-size:20px;">BarberStylo</strong>
+        <div
+          id="panelRole"
+          style="font-size:13px;color:#bbb;"
+        >
+          Área restrita
+        </div>
+      </div>
+    </div>
+
+    <button
+      id="logoutBtn"
+      type="button"
+      style="
+        background:#fff;
+        color:#000;
+        border:none;
+        border-radius:10px;
+        padding:10px 16px;
+        font-weight:700;
+        cursor:pointer;
+      "
+    >
+      Sair
+    </button>
+  </div>
+
+  <div style="
+    max-width:1100px;
+    margin:0 auto;
+    padding:30px 20px 100px;
+  ">
+
+    <p style="color:#777;font-size:13px;font-weight:700;">
+      BARBERSTYLO
+    </p>
+
+    <h1
+      id="panelWelcome"
+      style="margin:5px 0 8px;font-size:32px;"
+    >
+      Bem-vindo
+    </h1>
+
+    <p style="color:#666;margin-bottom:28px;">
+      Gerencie seus atendimentos pelo painel.
+    </p>
+
+
+    <!-- PAINEL DO BARBEIRO -->
+    <div id="barberPanel" style="display:none;">
+
+      <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+        gap:16px;
+      ">
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">📅</div>
+          <h3>Minha agenda</h3>
+          <p style="color:#666;">
+            Consulte seus horários e clientes.
+          </p>
+        </div>
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">✂️</div>
+          <h3>Meus serviços</h3>
+          <p style="color:#666;">
+            Consulte serviços, preços e duração.
+          </p>
+        </div>
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">💰</div>
+          <h3>Meus ganhos</h3>
+          <p style="color:#666;">
+            Acompanhe os atendimentos realizados.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- PAINEL DO ADMINISTRADOR -->
+    <div id="adminPanel" style="display:none;">
+
+      <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+        gap:16px;
+      ">
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">📅</div>
+          <h3>Agenda geral</h3>
+          <p style="color:#666;">
+            Veja os horários de todos os barbeiros.
+          </p>
+        </div>
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">✂️</div>
+          <h3>Barbeiros e serviços</h3>
+          <p style="color:#666;">
+            Gerencie equipe, preços e serviços.
+          </p>
+        </div>
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">💰</div>
+          <h3>Financeiro</h3>
+          <p style="color:#666;">
+            Consulte faturamento e resultados.
+          </p>
+        </div>
+
+        <div style="
+          background:#fff;
+          padding:22px;
+          border:1px solid #ddd;
+          border-radius:18px;
+        ">
+          <div style="font-size:28px;">📊</div>
+          <h3>Relatórios</h3>
+          <p style="color:#666;">
+            Acompanhe o desempenho da barbearia.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
 <!-- ÁREA RESTRITA - LOGIN -->
 <button
   id="openLoginBtn"
