@@ -1260,7 +1260,51 @@ Gostaria de confirmar meu agendamento.`;
 
 
   loadBarbers();
+document.addEventListener("DOMContentLoaded", () => {
 
+  const loginSubmit = document.getElementById("loginSubmit");
+  const loginMessage = document.getElementById("loginMessage");
+
+  loginSubmit.addEventListener("click", async () => {
+
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+
+    if (!email || !password) {
+      loginMessage.style.color = "#b00020";
+      loginMessage.textContent = "Preencha o e-mail e a senha.";
+      return;
+    }
+
+    loginSubmit.disabled = true;
+    loginSubmit.textContent = "Entrando...";
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      loginMessage.style.color = "#b00020";
+      loginMessage.textContent = "E-mail ou senha incorretos.";
+
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = "Entrar";
+      return;
+    }
+
+    loginMessage.style.color = "#16803c";
+    loginMessage.textContent = "Login realizado com sucesso!";
+
+    console.log("Usuário conectado:", data.user);
+
+    setTimeout(() => {
+      document.getElementById("loginDialog").close();
+    }, 1000);
+
+  });
+
+});
 </script>
 <!-- ÁREA RESTRITA - LOGIN -->
 <button
