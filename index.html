@@ -821,32 +821,13 @@
       `<option value="">Carregando serviços...</option>`;
 
 
-    const {
-      data,
-      error
-    } =
-      await supabase
-        .from("barber_services")
-        .select(`
-          id,
-          price,
-          duration_minutes,
-          service_id,
-          services (
-            id,
-            name,
-            description
-          )
-        `)
-        .eq(
-          "barber_id",
-          barberSelect.value
-        )
-        .eq(
-          "active",
-          true
-        );
-
+   const { data, error } =
+  await supabase.rpc(
+    "list_barber_services",
+    {
+      p_barber_id: Number(barberSelect.value)
+    }
+  );
 
     if(error){
 
@@ -877,7 +858,7 @@
         item.id;
 
       option.textContent =
-        `${item.services.name} • ${money(item.price)} • ${item.duration_minutes} min`;
+        `${item.service_name} • ${money(item.price)} • ${item.duration_minutes} min`;
 
       serviceSelect.appendChild(option);
 
