@@ -258,6 +258,56 @@
   function formatDateTime(date,time){
     return `${formatDate(date)} às ${(time || "").slice(0,5)}`;
   }
+
+  const dayNames = {
+    1:"Segunda", 2:"Terça", 3:"Quarta", 4:"Quinta", 5:"Sexta", 6:"Sábado", 7:"Domingo"
+  };
+
+  function isoWeekDay(dateValue){
+    if(!dateValue) return null;
+    const d = new Date(dateValue + "T12:00:00");
+    const jsDay = d.getDay(); // 0 domingo ... 6 sábado
+    return jsDay === 0 ? 7 : jsDay;
+  }
+
+  function promoApplies(service,dateValue){
+    if(!service || !dateValue) return false;
+    if(!service.promotion_active) return false;
+    const promoPrice = Number(service.promotional_price);
+    if(!Number.isFinite(promoPrice) || promoPrice < 0) return false;
+    const weekday = isoWeekDay(dateValue);
+    const days = Array.isArray(service.promotion_days) ? service.promotion_days.map(Number) : [];
+    return days.includes(weekday);
+  }
+
+  function effectivePrice(service,dateValue){
+    return promoApplies(service,dateValue)
+      ? Number(service.promotional_price)
+      : Number(service.price);
+  }
+
+  function promoDaysLabel(service){
+    const days = Array.isArray(service?.promotion_days) ? service.promotion_days.map(Number) : [];
+    if(!service?.promotion_active || !days.length || service?.promotional_price == null) return "";
+    return days.map(d => dayNames[d] || d).join(" e ");
+  }
+
+  function serviceOptionText(service){
+    const base = `${service.service_name} • ${money(effectivePrice(service,dateInput.value))} • ${service.duration_minutes} min`;
+    if(promoApplies(service,dateInput.value)) return `${base} • PROMOÇÃO`;
+    const promoDays = promoDaysLabel(service);
+    return promoDays ? `${base} • Promo ${promoDays}: ${money(service.promotional_price)}` : base;
+  }
+
+  function refreshServiceOptions(){
+    const selected = serviceSelect.value;
+    [...serviceSelect.options].forEach(option => {
+      if(!option.value) return;
+      const service = barberServices.find(s => String(s.id) === String(option.value));
+      if(service) option.textContent = serviceOptionText(service);
+    });
+    serviceSelect.value = selected;
+  }
   function selectedBarber(){ return barbers.find(b => String(b.id) === barberSelect.value); }
   function selectedService(){ return barberServices.find(s => String(s.id) === serviceSelect.value); }
 
@@ -266,7 +316,9 @@
     const service = selectedService();
     document.getElementById("summaryBarber").textContent = barber?.name || "—";
     document.getElementById("summaryService").textContent = service?.service_name || "—";
-    document.getElementById("summaryPrice").textContent = service ? money(service.price) : "—";
+    document.getElementById("summaryPrice").textContent = service
+      ? `${money(effectivePrice(service,dateInput.value))}${promoApplies(service,dateInput.value) ? " (promoção)" : ""}`
+      : "—";
     document.getElementById("summaryDuration").textContent = service ? `${service.duration_minutes} min` : "—";
     document.getElementById("summaryDate").textContent = formatDate(dateInput.value);
     document.getElementById("summaryTime").textContent = selectedSlot || "—";
@@ -319,7 +371,7 @@
     barberServices.forEach(item => {
       const option = document.createElement("option");
       option.value = item.id;
-      option.textContent = `${item.service_name} • ${money(item.price)} • ${item.duration_minutes} min`;
+      option.textContent = serviceOptionText(item);
       serviceSelect.appendChild(option);
     });
     serviceSelect.disabled = false;
@@ -373,7 +425,11 @@
     updateSummary();
     if(dateInput.value) loadSlots();
   });
-  dateInput.addEventListener("change",loadSlots);
+  dateInput.addEventListener("change",() => {
+    refreshServiceOptions();
+    updateSummary();
+    loadSlots();
+  });
 
   document.getElementById("confirmButton").addEventListener("click",async() => {
     bookingMessage.className = "message";
@@ -427,7 +483,7 @@ Cliente: ${clientName}
 WhatsApp: ${clientPhone}
 Barbeiro: ${barber.name}
 Serviço: ${service.service_name}
-Valor: ${money(service.price)}
+Valor: ${money(effectivePrice(service,dateInput.value))}${promoApplies(service,dateInput.value) ? " (promoção)" : ""}
 Data: ${weekDayFormatted}, ${formatDate(dateInput.value)}
 Horário: ${selectedSlot}
 Duração: ${service.duration_minutes} minutos
@@ -533,19 +589,242 @@ Gostaria de confirmar meu agendamento.`;
 
   async function renderBarberServices(){
     panelContent.className = "panel-content active";
-    panelContent.innerHTML = `<div class="panel-content-head"><div><h2>Meus serviços</h2><p class="muted">Serviços, preços e duração cadastrados para você.</p></div></div><div class="loading">Carregando...</div>`;
+    panelContent.innerHTML = `<div class="panel-content-head"><div><h2>Meus serviços</h2><p class="muted">Adicione, edite, promova ou retire seus próprios serviços.</p></div></div><div class="loading">Carregando...</div>`;
+
+    const dayChecksHtml = (prefix, selectedDays = []) => {
+      const selected = new Set((selectedDays || []).map(Number));
+      const days = [
+        [1,"Seg"], [2,"Ter"], [3,"Qua"], [4,"Qui"], [5,"Sex"], [6,"Sáb"], [7,"Dom"]
+      ];
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">` +
+        days.map(([value,label]) => `
+          <label style="margin:0;display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600">
+            <input type="checkbox" class="${prefix}-promo-day" value="${value}" ${selected.has(value) ? "checked" : ""} style="width:auto;min-height:auto">
+            ${label}
+          </label>`).join("") +
+        `</div>`;
+    };
+
     try{
-      const { data, error } = await supabase.rpc("list_barber_services",{p_barber_id:Number(currentProfile.barber_id)});
+      const { data, error } = await supabase.rpc("list_barber_services",{
+        p_barber_id:Number(currentProfile.barber_id)
+      });
       if(error) throw error;
-      panelContent.innerHTML = `<div class="panel-content-head"><div><h2>Meus serviços</h2><p class="muted">${data?.length || 0} serviço(s) ativo(s).</p></div></div><div id="myServicesList" class="list"></div>`;
+
+      panelContent.innerHTML = `
+        <div class="panel-content-head">
+          <div>
+            <h2>Meus serviços</h2>
+            <p class="muted">${data?.length || 0} serviço(s) ativo(s). Você pode alterar nome, preço, duração e promoção.</p>
+          </div>
+        </div>
+
+        <div class="list-item" style="margin-bottom:16px;background:#fafafa;">
+          <h3>Adicionar novo serviço</h3>
+
+          <div class="service-edit">
+            <div class="service-name">
+              <label>Nome do corte/serviço</label>
+              <input id="newServiceName" type="text" placeholder="Ex.: Corte Navalhado">
+            </div>
+            <div>
+              <label>Preço normal</label>
+              <input id="newServicePrice" type="number" min="0" step="0.01" placeholder="0,00">
+            </div>
+            <div>
+              <label>Duração</label>
+              <input id="newServiceDuration" type="number" min="5" step="5" placeholder="30">
+            </div>
+            <button id="addMyServiceBtn" class="btn-small btn-light save-service">Adicionar</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <label>Descrição</label>
+            <input id="newServiceDescription" type="text" placeholder="Descrição opcional">
+          </div>
+
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid #ddd">
+            <label style="margin-top:0;display:flex;align-items:center;gap:8px">
+              <input id="newPromotionActive" type="checkbox" style="width:auto;min-height:auto">
+              Promoção ativa
+            </label>
+            <div style="display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px;align-items:end">
+              <div>
+                <label>Preço promocional</label>
+                <input id="newPromotionalPrice" type="number" min="0" step="0.01" placeholder="0,00">
+              </div>
+              <div>
+                <label>Dias da promoção</label>
+                ${dayChecksHtml("new", [1,3])}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="myServicesList" class="list"></div>`;
+
+      document.getElementById("addMyServiceBtn").addEventListener("click", async () => {
+        const name = document.getElementById("newServiceName").value.trim();
+        const description = document.getElementById("newServiceDescription").value.trim();
+        const price = Number(document.getElementById("newServicePrice").value);
+        const duration = Number(document.getElementById("newServiceDuration").value);
+        const promotionActive = document.getElementById("newPromotionActive").checked;
+        const promotionalRaw = document.getElementById("newPromotionalPrice").value;
+        const promotionalPrice = promotionalRaw === "" ? null : Number(promotionalRaw);
+        const promotionDays = [...document.querySelectorAll(".new-promo-day:checked")].map(el => Number(el.value));
+
+        if(!name || !Number.isFinite(price) || price < 0 || !duration || duration < 5){
+          alert("Preencha nome, preço e duração corretamente.");
+          return;
+        }
+
+        if(promotionActive && (promotionalPrice == null || promotionalPrice < 0 || !promotionDays.length)){
+          alert("Para ativar a promoção, informe o preço promocional e pelo menos um dia.");
+          return;
+        }
+
+        const { error:addError } = await supabase.rpc("add_my_barber_service",{
+          p_name:name,
+          p_description:description || null,
+          p_price:price,
+          p_duration_minutes:duration,
+          p_promotion_active:promotionActive,
+          p_promotional_price:promotionActive ? promotionalPrice : null,
+          p_promotion_days:promotionActive ? promotionDays : []
+        });
+
+        if(addError){
+          console.error(addError);
+          alert("Não foi possível adicionar o serviço.");
+          return;
+        }
+
+        await renderBarberServices();
+      });
+
       const list = document.getElementById("myServicesList");
-      if(!data?.length){ list.innerHTML = `<div class="empty">Nenhum serviço cadastrado.</div>`; return; }
+
+      if(!data?.length){
+        list.innerHTML = `<div class="empty">Nenhum serviço cadastrado. Use o formulário acima para adicionar o primeiro.</div>`;
+        return;
+      }
+
       data.forEach(s => {
         const item = document.createElement("div");
         item.className = "list-item";
-        item.innerHTML = `<strong>${s.service_name}</strong><div>${money(s.price)}</div><div class="muted">${s.duration_minutes} minutos${s.description ? ` • ${s.description}` : ""}</div>`;
+        item.innerHTML = `
+          <div class="service-edit">
+            <div class="service-name">
+              <label>Nome do corte/serviço</label>
+              <input class="edit-name" type="text" value="${String(s.service_name || "").replace(/"/g,"&quot;")}">
+            </div>
+            <div>
+              <label>Preço normal</label>
+              <input class="edit-price" type="number" min="0" step="0.01" value="${Number(s.price || 0)}">
+            </div>
+            <div>
+              <label>Duração</label>
+              <input class="edit-duration" type="number" min="5" step="5" value="${Number(s.duration_minutes || 30)}">
+            </div>
+            <button class="btn-small btn-light save-service">Salvar</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <label>Descrição</label>
+            <input class="edit-description" type="text" value="${String(s.description || "").replace(/"/g,"&quot;")}" placeholder="Descrição opcional">
+          </div>
+
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid #ddd">
+            <label style="margin-top:0;display:flex;align-items:center;gap:8px">
+              <input class="edit-promotion-active" type="checkbox" ${s.promotion_active ? "checked" : ""} style="width:auto;min-height:auto">
+              Promoção ativa
+            </label>
+
+            <div style="display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px;align-items:end">
+              <div>
+                <label>Preço promocional</label>
+                <input class="edit-promotional-price" type="number" min="0" step="0.01" value="${s.promotional_price == null ? "" : Number(s.promotional_price)}" placeholder="0,00">
+              </div>
+              <div>
+                <label>Dias da promoção</label>
+                ${dayChecksHtml(`svc-${s.id}`, s.promotion_days || [])}
+              </div>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button class="btn-small btn-danger remove-service">Retirar serviço</button>
+          </div>`;
+
+        const nameInput = item.querySelector(".edit-name");
+        const descriptionInput = item.querySelector(".edit-description");
+        const priceInput = item.querySelector(".edit-price");
+        const durationInput = item.querySelector(".edit-duration");
+        const promotionActiveInput = item.querySelector(".edit-promotion-active");
+        const promotionalPriceInput = item.querySelector(".edit-promotional-price");
+
+        item.querySelector(".save-service").addEventListener("click", async () => {
+          const name = nameInput.value.trim();
+          const description = descriptionInput.value.trim();
+          const price = Number(priceInput.value);
+          const duration = Number(durationInput.value);
+          const promotionActive = promotionActiveInput.checked;
+          const promotionalRaw = promotionalPriceInput.value;
+          const promotionalPrice = promotionalRaw === "" ? null : Number(promotionalRaw);
+          const promotionDays = [...item.querySelectorAll(`.svc-${s.id}-promo-day:checked`)].map(el => Number(el.value));
+
+          if(!name || !Number.isFinite(price) || price < 0 || !duration || duration < 5){
+            alert("Preencha nome, preço e duração corretamente.");
+            return;
+          }
+
+          if(promotionActive && (promotionalPrice == null || promotionalPrice < 0 || !promotionDays.length)){
+            alert("Para ativar a promoção, informe o preço promocional e pelo menos um dia.");
+            return;
+          }
+
+          const { error:updateError } = await supabase.rpc("update_my_barber_service",{
+            p_barber_service_id:Number(s.id),
+            p_name:name,
+            p_description:description || null,
+            p_price:price,
+            p_duration_minutes:duration,
+            p_active:true,
+            p_promotion_active:promotionActive,
+            p_promotional_price:promotionActive ? promotionalPrice : null,
+            p_promotion_days:promotionActive ? promotionDays : []
+          });
+
+          if(updateError){
+            console.error(updateError);
+            alert("Não foi possível salvar as alterações.");
+            return;
+          }
+
+          alert("Serviço atualizado.");
+          await renderBarberServices();
+        });
+
+        item.querySelector(".remove-service").addEventListener("click", async () => {
+          const ok = confirm(`Retirar "${s.service_name}" da sua lista de serviços?`);
+          if(!ok) return;
+
+          const { error:removeError } = await supabase.rpc("remove_my_barber_service",{
+            p_barber_service_id:Number(s.id)
+          });
+
+          if(removeError){
+            console.error(removeError);
+            alert("Não foi possível retirar o serviço.");
+            return;
+          }
+
+          await renderBarberServices();
+        });
+
         list.appendChild(item);
       });
+
     }catch(error){
       console.error(error);
       panelContent.innerHTML = `<div class="empty">Não foi possível carregar os serviços.</div>`;
