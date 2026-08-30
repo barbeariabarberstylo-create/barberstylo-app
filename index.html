@@ -225,7 +225,34 @@
     </div>
     <label class="check-line"><input id="rememberLogin" type="checkbox" checked>Manter-me conectado neste aparelho</label>
     <button id="loginSubmit" class="login-submit">Entrar</button>
+    <button id="forgotPasswordBtn" type="button" style="width:100%;border:0;background:transparent;padding:14px 0 0;color:#333;font-weight:700">Esqueci minha senha</button>
     <div id="loginMessage"></div>
+  </div>
+</dialog>
+
+
+<dialog id="resetPasswordDialog">
+  <div class="login-box">
+    <div class="login-head">
+      <div>
+        <div style="font-size:13px;color:#777;font-weight:700">BARBERSTYLO</div>
+        <h2 style="margin:4px 0 0">Criar nova senha</h2>
+      </div>
+      <button id="closeResetPasswordBtn" class="close-round" type="button">×</button>
+    </div>
+    <p style="color:#666;margin-bottom:18px">Digite sua nova senha de acesso.</p>
+    <label for="newRecoveryPassword">Nova senha</label>
+    <div class="password-wrap">
+      <input id="newRecoveryPassword" type="password" minlength="6" placeholder="Mínimo de 6 caracteres">
+      <button class="password-toggle recovery-eye" type="button" data-target="newRecoveryPassword">👁️</button>
+    </div>
+    <label for="confirmRecoveryPassword">Confirmar nova senha</label>
+    <div class="password-wrap">
+      <input id="confirmRecoveryPassword" type="password" minlength="6" placeholder="Digite novamente">
+      <button class="password-toggle recovery-eye" type="button" data-target="confirmRecoveryPassword">👁️</button>
+    </div>
+    <button id="saveRecoveryPasswordBtn" class="login-submit" style="margin-top:18px">Salvar nova senha</button>
+    <div id="resetPasswordMessage" style="margin-top:15px;text-align:center;font-size:14px"></div>
   </div>
 </dialog>
 
@@ -1092,10 +1119,29 @@ Gostaria de confirmar meu agendamento.`;
     }
   }
 
+  async function callManageBarberUser(payload){
+    const {data:{session}} = await supabase.auth.getSession();
+    if(!session) throw new Error("Sessão expirada. Entre novamente.");
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-barber-user`,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${session.access_token}`
+      },
+      body:JSON.stringify(payload)
+    });
+    const body = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(body.error || "Não foi possível concluir a operação.");
+    return body;
+  }
+
   async function renderAdminBarbers(){
     panelContent.className = "panel-content active";
     panelContent.innerHTML = `
-      <div class="panel-content-head"><div><h2>Barbeiros</h2><p class="muted">Cadastre novos profissionais e gerencie a equipe.</p></div></div>
+      <div class="panel-content-head">
+        <div><h2>Barbeiros</h2><p class="muted">Cadastre profissionais, ative/desative acessos e altere senhas.</p></div>
+      </div>
+
       <div class="list-item" style="margin-bottom:16px">
         <h3>Cadastrar barbeiro</h3>
         <div class="form-grid">
@@ -1105,37 +1151,89 @@ Gostaria de confirmar meu agendamento.`;
           <div><label>Senha provisória</label><input id="newBarberPassword" type="password" minlength="6"></div>
         </div>
         <button id="createBarberBtn" class="btn btn-dark">Cadastrar barbeiro</button>
-        <div class="note" style="margin-top:10px">O cadastro de login é feito com segurança por uma função do Supabase. Nunca coloque a chave secreta no HTML.</div>
+        <div class="note" style="margin-top:10px">O barbeiro poderá usar “Esqueci minha senha” para receber a recuperação diretamente no e-mail.</div>
       </div>
-      <div id="barberAdminList" class="list"></div>`;
-    const list = document.getElementById("barberAdminList");
-    barbers.forEach(b=>{
-      const item = document.createElement("div");
-      item.className = "list-item";
-      item.innerHTML = `<strong>${escapeHtml(b.name)}</strong><div class="muted">WhatsApp: ${escapeHtml(b.phone || "—")}</div>
-        <div><span class="pill ${b.active === false ? "red":"green"}">${b.active === false ? "Inativo":"Ativo"}</span></div>`;
-      list.appendChild(item);
-    });
+
+      <div id="barberAdminList" class="list"><div class="loading">Carregando equipe...</div></div>`;
+
+    async function reloadBarbersAdmin(){
+      const list = document.getElementById("barberAdminList");
+      const {data,error} = await supabase.rpc("admin_list_barbers");
+      if(error){
+        console.error(error);
+        list.innerHTML = `<div class="empty">Execute o SQL complementar de senhas e acessos.</div>`;
+        return;
+      }
+      list.innerHTML = "";
+      (data || []).forEach(b=>{
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.innerHTML = `
+          <strong>${escapeHtml(b.name)}</strong>
+          <div class="muted">WhatsApp: ${escapeHtml(b.phone || "—")}</div>
+          <div class="muted">E-mail: ${escapeHtml(b.email || "Não informado")}</div>
+          <div><span class="pill ${b.active ? "green":"red"}">${b.active ? "ATIVO":"DESATIVADO"}</span></div>
+          <div class="action-row">
+            <button class="btn-small ${b.active ? "btn-danger":"btn-light"} toggle-barber">${b.active ? "Desativar barbeiro":"Ativar barbeiro"}</button>
+            ${b.auth_user_id ? `<button class="btn-small btn-light change-password">Alterar senha</button>` : `<span class="pill">Login ainda não criado</span>`}
+          </div>`;
+        item.querySelector(".toggle-barber").addEventListener("click",async()=>{
+          const action = b.active ? "desativar" : "ativar";
+          if(!confirm(`Deseja ${action} o acesso de ${b.name}?`)) return;
+          const {error:e} = await supabase.rpc("admin_set_barber_active",{
+            p_barber_id:Number(b.id),
+            p_active:!b.active
+          });
+          if(e){console.error(e);alert("Não foi possível alterar o acesso.");return}
+          await loadBarbers();
+          await reloadBarbersAdmin();
+          await renderPublicCatalog();
+        });
+        const passBtn = item.querySelector(".change-password");
+        if(passBtn){
+          passBtn.addEventListener("click",async()=>{
+            const p1 = prompt(`Digite a nova senha de ${b.name} (mínimo 6 caracteres):`);
+            if(p1 === null) return;
+            if(p1.length < 6){alert("A senha precisa ter pelo menos 6 caracteres.");return}
+            const p2 = prompt("Digite a nova senha novamente:");
+            if(p2 !== p1){alert("As senhas não coincidem.");return}
+            try{
+              await callManageBarberUser({action:"set_password",barber_id:Number(b.id),password:p1});
+              alert("Senha alterada com sucesso.");
+            }catch(err){
+              console.error(err); alert(err.message);
+            }
+          });
+        }
+        list.appendChild(item);
+      });
+      if(!(data || []).length) list.innerHTML = `<div class="empty">Nenhum barbeiro cadastrado.</div>`;
+    }
+
     document.getElementById("createBarberBtn").addEventListener("click",async()=>{
       const body = {
+        action:"create",
         name:document.getElementById("newBarberName").value.trim(),
         phone:normalizePhone(document.getElementById("newBarberPhone").value),
         email:document.getElementById("newBarberEmail").value.trim(),
         password:document.getElementById("newBarberPassword").value
       };
-      if(!body.name || !body.phone || !body.email || body.password.length < 6){alert("Preencha nome, WhatsApp, e-mail e uma senha com pelo menos 6 caracteres.");return}
-      const {data:{session}} = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-barber-user`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${session?.access_token || ""}`},
-        body:JSON.stringify(body)
-      });
-      const payload = await res.json().catch(()=>({}));
-      if(!res.ok){console.error(payload);alert(payload.error || "Não foi possível cadastrar o barbeiro.");return}
-      alert("Barbeiro cadastrado com sucesso.");
-      await loadBarbers();
-      await renderAdminBarbers();
+      if(!body.name || !body.phone || !body.email || body.password.length < 6){
+        alert("Preencha nome, WhatsApp, e-mail e uma senha com pelo menos 6 caracteres.");
+        return;
+      }
+      try{
+        await callManageBarberUser(body);
+        alert("Barbeiro e login cadastrados com sucesso.");
+        await loadBarbers();
+        await reloadBarbersAdmin();
+        await renderPublicCatalog();
+      }catch(err){
+        console.error(err); alert(err.message);
+      }
     });
+
+    await reloadBarbersAdmin();
   }
 
   async function renderScheduleBlocks(adminMode=false){
@@ -1392,6 +1490,91 @@ Gostaria de confirmar meu agendamento.`;
   document.getElementById("teamButton").addEventListener("click",() => {
     if(currentProfile) openRestrictedPanel(currentProfile);
     else loginDialog.showModal();
+  });
+
+
+  const resetPasswordDialog = document.getElementById("resetPasswordDialog");
+  const resetPasswordMessage = document.getElementById("resetPasswordMessage");
+
+  document.querySelectorAll(".recovery-eye").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const input = document.getElementById(btn.dataset.target);
+      input.type = input.type === "password" ? "text" : "password";
+      btn.textContent = input.type === "password" ? "👁️" : "🙈";
+    });
+  });
+
+  document.getElementById("closeResetPasswordBtn").addEventListener("click",()=>resetPasswordDialog.close());
+
+  document.getElementById("forgotPasswordBtn").addEventListener("click",async()=>{
+    const input = document.getElementById("loginEmail");
+    const email = input.value.trim() || prompt("Digite o e-mail cadastrado:");
+    if(!email) return;
+
+    loginMessage.style.color = "#666";
+    loginMessage.textContent = "Enviando e-mail de recuperação...";
+
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const {error} = await supabase.auth.resetPasswordForEmail(email,{redirectTo});
+
+    if(error){
+      console.error(error);
+      loginMessage.style.color = "#b00020";
+      loginMessage.textContent = "Não foi possível enviar o e-mail. Confira o endereço informado.";
+      return;
+    }
+
+    loginMessage.style.color = "#16803c";
+    loginMessage.textContent = "Enviamos um link de recuperação para o seu e-mail. Confira também a caixa de spam.";
+  });
+
+  document.getElementById("saveRecoveryPasswordBtn").addEventListener("click",async()=>{
+    const p1 = document.getElementById("newRecoveryPassword").value;
+    const p2 = document.getElementById("confirmRecoveryPassword").value;
+    resetPasswordMessage.textContent = "";
+
+    if(p1.length < 6){
+      resetPasswordMessage.style.color = "#b00020";
+      resetPasswordMessage.textContent = "A senha precisa ter pelo menos 6 caracteres.";
+      return;
+    }
+    if(p1 !== p2){
+      resetPasswordMessage.style.color = "#b00020";
+      resetPasswordMessage.textContent = "As senhas não coincidem.";
+      return;
+    }
+
+    const btn = document.getElementById("saveRecoveryPasswordBtn");
+    btn.disabled = true;
+    btn.textContent = "Salvando...";
+
+    const {error} = await supabase.auth.updateUser({password:p1});
+
+    btn.disabled = false;
+    btn.textContent = "Salvar nova senha";
+
+    if(error){
+      console.error(error);
+      resetPasswordMessage.style.color = "#b00020";
+      resetPasswordMessage.textContent = "Não foi possível alterar a senha. Abra novamente o link recebido por e-mail.";
+      return;
+    }
+
+    resetPasswordMessage.style.color = "#16803c";
+    resetPasswordMessage.textContent = "Senha alterada com sucesso!";
+    setTimeout(()=>{
+      resetPasswordDialog.close();
+      loginDialog.showModal();
+    },900);
+  });
+
+  supabase.auth.onAuthStateChange((event)=>{
+    if(event === "PASSWORD_RECOVERY"){
+      setTimeout(()=>{
+        try{ if(loginDialog.open) loginDialog.close(); }catch(e){}
+        resetPasswordDialog.showModal();
+      },100);
+    }
   });
 
   loginSubmit.addEventListener("click",async() => {
