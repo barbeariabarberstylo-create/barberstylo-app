@@ -1295,7 +1295,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
     loginMessage.style.color = "#16803c";
     loginMessage.textContent = "Login realizado com sucesso!";
+const { data: profileData, error: profileError } =
+  await supabase.rpc("get_current_user_profile");
 
+if (profileError || !profileData || profileData.length === 0) {
+  loginMessage.style.color = "#b00020";
+  loginMessage.textContent =
+    "Usuário autenticado, mas sem perfil de acesso.";
+
+  loginSubmit.disabled = false;
+  loginSubmit.textContent = "Entrar";
+  return;
+}
+
+const profile = profileData[0];
+
+const restrictedPanel =
+  document.getElementById("restrictedPanel");
+
+const adminPanel =
+  document.getElementById("adminPanel");
+
+const barberPanel =
+  document.getElementById("barberPanel");
+
+const panelRole =
+  document.getElementById("panelRole");
+
+const panelWelcome =
+  document.getElementById("panelWelcome");
+
+if (profile.role === "admin") {
+
+  panelRole.textContent = "Administrador";
+  panelWelcome.textContent = "Painel administrativo";
+
+  adminPanel.style.display = "block";
+  barberPanel.style.display = "none";
+
+} else {
+
+  panelRole.textContent = "Barbeiro";
+  panelWelcome.textContent =
+    `Olá, ${profile.barber_name}`;
+
+  barberPanel.style.display = "block";
+  adminPanel.style.display = "none";
+
+}
+
+restrictedPanel.style.display = "block";
+    const logoutBtn = document.getElementById("logoutBtn");
+
+logoutBtn.onclick = async () => {
+  await supabase.auth.signOut();
+
+  restrictedPanel.style.display = "none";
+  adminPanel.style.display = "none";
+  barberPanel.style.display = "none";
+
+  loginMessage.textContent = "";
+  loginSubmit.disabled = false;
+  loginSubmit.textContent = "Entrar";
+
+  document.getElementById("loginEmail").value = "";
+  document.getElementById("loginPassword").value = "";
+};
     console.log("Usuário conectado:", data.user);
 
     setTimeout(() => {
