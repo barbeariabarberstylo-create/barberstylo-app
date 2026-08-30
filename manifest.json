@@ -1,0 +1,11 @@
+{
+  "name": "BarberStylo",
+  "short_name": "BarberStylo",
+  "description": "Agendamentos e gestão da BarberStylo",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary"
+}
