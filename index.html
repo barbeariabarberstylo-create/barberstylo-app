@@ -1731,14 +1731,13 @@ Te esperamos!
       ${a.status==="completed"?`<div class="muted">Recebido: ${money(a.amount_paid??a.price_charged)} • ${paymentLabel(a.payment_method)}</div>`:""}
       <div><span class="status ${a.status||""}">${statusLabel(a.status)}</span> ${sent?`<span class="pill green">${sent}</span>`:""}</div>
       <div class="action-row">
-        ${!["confirmed","confirmation_sent","completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light confirm-only">✅ Confirmar</button>`:""}
-        ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light confirm-wa">💬 ${a.confirmation_sent_at?"Abrir WhatsApp novamente":"Confirmar e WhatsApp"}</button>`:""}
+        
+        ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-dark confirm-wa" style="font-weight:800">💬 ${a.confirmation_sent_at?"Abrir WhatsApp novamente":"Confirmar e enviar WhatsApp"}</button>`:""}
         ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light start-service">✂️ Iniciar</button>`:""}
         ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-dark finish-service" style="font-weight:800">✅ Concluir atendimento</button>`:""}
         ${a.status!=="cancelled"&&a.status!=="completed"?`<button class="btn-small btn-danger cancel-service">Cancelar e liberar</button><button class="btn-small btn-danger no-show">Não compareceu</button>`:""}
         ${currentProfile?.pix_enabled&&currentProfile?.pix_key?`<button class="btn-small btn-light send-pix">🔑 Enviar Pix</button>`:""}
       </div>`;
-    div.querySelector(".confirm-only")?.addEventListener("click",async()=>{try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"confirm"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){console.error(e);alert("Não foi possível confirmar.")}});
     div.querySelector(".confirm-wa")?.addEventListener("click",()=>{ if(a.confirmation_sent_at && !confirm("A confirmação já foi enviada para este cliente. Deseja abrir o WhatsApp novamente?")) return; openClientWhatsapp(a,"confirmation"); });
     div.querySelector(".start-service")?.addEventListener("click",async()=>{try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"start"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){console.error(e);alert("Não foi possível iniciar.")}});
     div.querySelector(".finish-service")?.addEventListener("click",()=>finalizeAppointment(a));
@@ -2041,7 +2040,7 @@ Te esperamos!
               </div>
 
               <div class="action-row" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
-                ${["pending","awaiting_confirmation"].includes(a.status)?`<button class="btn-small btn-dark day-confirm" style="font-weight:800">✅ Confirmar horário</button>`:""}
+                ${["pending","awaiting_confirmation"].includes(a.status)?`<button class="btn-small btn-dark day-confirm" style="font-weight:800">💬 Confirmar e enviar WhatsApp</button>`:""}
                 ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-dark day-finish" style="font-weight:800">✅ Concluir atendimento</button>`:""}
                 ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light day-start">✂️ Iniciar atendimento</button>`:""}
                 ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light day-move">🕒 Mudar horário</button>`:""}
@@ -2069,19 +2068,8 @@ Te esperamos!
               </div>
             `;
 
-            row.querySelector(".day-confirm")?.addEventListener("click",async()=>{
-              try{
-                const {error}=await supabase.rpc("set_appointment_action",{
-                  p_appointment_id:Number(a.id),
-                  p_action:"confirm"
-                });
-                if(error)throw error;
-                alert("Horário confirmado.");
-                renderToday(adminMode);
-              }catch(e){
-                console.error(e);
-                alert(e.message||"Não foi possível confirmar o horário.");
-              }
+            row.querySelector(".day-confirm")?.addEventListener("click",()=>{
+              openClientWhatsapp(a,"confirmation");
             });
 
             row.querySelector(".day-start")?.addEventListener("click",async()=>{
