@@ -1644,83 +1644,149 @@ Te esperamos!
 
   async function renderToday(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="loading">Carregando agenda...</div>`;
+    panelContent.innerHTML=`<div class="loading">Carregando painel de hoje...</div>`;
 
     try{
-      const all=await fetchAppointments();
+      const [allResult,returnResult]=await Promise.all([
+        supabase.rpc("list_dashboard_appointments"),
+        supabase.rpc("list_returns_dashboard",{p_horizon_days:30})
+      ]);
+      if(allResult.error)throw allResult.error;
+
+      const all=(allResult.data||[]).sort((a,b)=>{
+        const da=`${a.appointment_date||""} ${a.start_time||""}`;
+        const db=`${b.appointment_date||""} ${b.start_time||""}`;
+        return da.localeCompare(db);
+      });
+      const returns=returnResult.error?[]:(returnResult.data||[]);
+
       const now=new Date();
       const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      const monthPrefix=today.slice(0,7);
+
       const mine=all.filter(a=>adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id));
+      const myReturns=returns.filter(r=>adminMode||!r.barber_id||Number(r.barber_id)===Number(currentProfile?.barber_id));
 
       const waitingAll=mine
         .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
-        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
-
-      const confirmedFuture=mine
-        .filter(a=>a.appointment_date>=today && ["confirmed","confirmation_sent","in_service"].includes(a.status))
         .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
 
       const todayAppointments=mine
         .filter(a=>a.appointment_date===today && !["cancelled"].includes(a.status))
         .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
 
-      const todayConfirmed=todayAppointments.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
+      const todayConfirmed=todayAppointments
+        .filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status))
+        .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
+
       const todayCompleted=todayAppointments.filter(a=>a.status==="completed");
-      const nextToday=todayAppointments
-        .filter(a=>!["completed","cancelled","no_show"].includes(a.status))
-        .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""))[0];
+
+      const monthCompleted=mine.filter(a=>
+        a.status==="completed" &&
+        String(a.appointment_date||"").startsWith(monthPrefix)
+      );
+
+      const confirmedFuture=mine
+        .filter(a=>a.appointment_date>=today && ["confirmed","confirmation_sent","in_service"].includes(a.status))
+        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+
+      const todayReturns=myReturns.filter(r=>Number(r.days_until_return)===0);
+      const overdueReturns=myReturns.filter(r=>Number(r.days_until_return)<0);
+      const next7Returns=myReturns.filter(r=>Number(r.days_until_return)>0 && Number(r.days_until_return)<=7);
+
+      const nextToday=todayConfirmed[0]||null;
 
       panelContent.innerHTML=`
         <div class="panel-content-head">
           <div>
-            <h2>Agenda — ${formatDateWithWeekday(today)}</h2>
-            <p class="muted">Confirme os próximos horários e acompanhe os que já estão confirmados.</p>
+            <h2>☀️ Hoje — ${formatDateWithWeekday(today)}</h2>
+            <p class="muted">${adminMode?"Resumo completo da barbearia.":"Seu painel rápido para começar o dia."}</p>
           </div>
           <button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button>
         </div>
 
         <div class="stats-grid">
+          <div class="stat"><small>Confirmados hoje</small><strong>${todayConfirmed.length}</strong></div>
+          <div class="stat"><small>Atendidos hoje</small><strong>${todayCompleted.length}</strong></div>
+          <div class="stat"><small>Atendidos no mês</small><strong>${monthCompleted.length}</strong></div>
+          <div class="stat"><small>Retornos hoje</small><strong>${todayReturns.length}</strong></div>
+          <div class="stat"><small>Retornos atrasados</small><strong>${overdueReturns.length}</strong></div>
           <div class="stat"><small>Aguardando confirmação</small><strong>${waitingAll.length}</strong></div>
-          <div class="stat"><small>Confirmados próximos</small><strong>${confirmedFuture.length}</strong></div>
-          <div class="stat"><small>Realizados hoje</small><strong>${todayCompleted.length}</strong></div>
-          <div class="stat"><small>Próximo hoje</small><strong style="font-size:18px">${nextToday?(nextToday.start_time||"").slice(0,5)+" • "+escapeHtml(nextToday.client_name):"—"}</strong></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>✅ Horários confirmados de hoje</h3>
+          <p class="muted">${nextToday?`Próximo: ${(nextToday.start_time||"").slice(0,5)} • ${escapeHtml(nextToday.client_name||"Cliente")}`:"Nenhum horário confirmado para hoje."}</p>
+          <div id="todayConfirmedHome" class="list"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>🔁 Retornos</h3>
+          <div class="stats-grid" style="margin-top:10px">
+            <div class="stat"><small>Hoje</small><strong>${todayReturns.length}</strong></div>
+            <div class="stat"><small>Atrasados</small><strong>${overdueReturns.length}</strong></div>
+            <div class="stat"><small>Próximos 7 dias</small><strong>${next7Returns.length}</strong></div>
+          </div>
+          <div id="homeReturnsList" class="list" style="margin-top:12px"></div>
+          <button id="openReturnsHome" class="btn btn-light" style="margin-top:12px">Ver todos os retornos</button>
         </div>
 
         <div class="card" style="margin-top:16px">
           <h3>🔔 Aguardando confirmação</h3>
-          <p class="muted">Hoje e próximos dias.</p>
+          <p class="muted">Solicitações de hoje e dos próximos dias.</p>
           <div id="waitingAllList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>✅ Agendamentos confirmados</h3>
-          <p class="muted">Depois de confirmar, o cliente continua aqui até o atendimento ser concluído.</p>
+          <h3>📆 Próximos confirmados</h3>
           <div id="confirmedFutureList" class="list"></div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
-          <h3>📋 Horários de hoje</h3>
-          <div id="todayAllList" class="list"></div>
         </div>`;
 
+      const todayConfirmedList=document.getElementById("todayConfirmedHome");
+      todayConfirmed.forEach(a=>todayConfirmedList.appendChild(appointmentItem(a,adminMode)));
+      if(!todayConfirmed.length) todayConfirmedList.innerHTML=`<div class="empty">Nenhum horário confirmado para hoje.</div>`;
+
+      const homeReturns=document.getElementById("homeReturnsList");
+      const priorityReturns=[...overdueReturns,...todayReturns,...next7Returns].slice(0,6);
+      if(!priorityReturns.length){
+        homeReturns.innerHTML=`<div class="empty">Nenhum retorno urgente nos próximos 7 dias.</div>`;
+      }else{
+        priorityReturns.forEach(r=>{
+          const days=Number(r.days_until_return);
+          const line=document.createElement("div");
+          line.className="list-item";
+          line.innerHTML=`
+            <strong>${escapeHtml(r.client_name||"Cliente")}</strong>
+            <div class="muted">${escapeHtml(r.service_name||"Procedimento")} • ${
+              days<0?`atrasado ${Math.abs(days)} dia${Math.abs(days)===1?"":"s"}`:
+              days===0?"retorno hoje":`retorno em ${days} dia${days===1?"":"s"}`
+            }</div>
+            ${r.client_phone?`<button class="btn-small btn-light home-return-wa">💬 WhatsApp</button>`:""}`;
+          line.querySelector(".home-return-wa")?.addEventListener("click",()=>{
+            const phone=phoneForWhatsapp(r.client_phone);
+            const text=`Olá, ${r.client_name||"cliente"}! Tudo bem? Está na hora do seu retorno na BarberStylo. Quer reservar seu próximo horário?`;
+            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
+          });
+          homeReturns.appendChild(line);
+        });
+      }
+
       const waitingList=document.getElementById("waitingAllList");
-      waitingAll.forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
+      waitingAll.slice(0,8).forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
       if(!waitingAll.length) waitingList.innerHTML=`<div class="empty">Nenhum agendamento aguardando confirmação.</div>`;
 
       const confirmedList=document.getElementById("confirmedFutureList");
-      confirmedFuture.forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
-      if(!confirmedFuture.length) confirmedList.innerHTML=`<div class="empty">Nenhum agendamento confirmado próximo.</div>`;
-
-      const allList=document.getElementById("todayAllList");
-      todayAppointments.forEach(a=>allList.appendChild(appointmentItem(a,adminMode)));
-      if(!todayAppointments.length) allList.innerHTML=`<div class="empty">Nenhum atendimento marcado para hoje.</div>`;
+      confirmedFuture.slice(0,8).forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
+      if(!confirmedFuture.length) confirmedList.innerHTML=`<div class="empty">Nenhum próximo horário confirmado.</div>`;
 
       document.getElementById("openFullAgenda")?.addEventListener("click",()=>renderAgenda(adminMode));
+      document.getElementById("openReturnsHome")?.addEventListener("click",()=>renderReturns(adminMode));
     }catch(e){
       console.error(e);
-      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar a agenda.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
+      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o painel.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
     }
   }
+
   async function renderAgenda(adminMode){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="loading">Carregando agenda...</div>`;
@@ -1986,6 +2052,53 @@ Te esperamos!
     await loadManualServices();
   }
 
+
+  function daysBetweenDates(fromDate,toDate){
+    if(!fromDate)return null;
+    const a=new Date(`${fromDate}T12:00:00`);
+    const b=toDate?new Date(`${toDate}T12:00:00`):new Date();
+    b.setHours(12,0,0,0);
+    return Math.max(0,Math.floor((b-a)/86400000));
+  }
+
+  function inactivityReminder(days){
+    if(days===null)return {
+      label:"Sem atendimento concluído",
+      className:"",
+      detail:"Este cliente ainda não possui atendimento concluído."
+    };
+    if(days===0)return {
+      label:"Atendido hoje",
+      className:"green",
+      detail:"Cliente atendido hoje."
+    };
+    if(days<15)return {
+      label:`Há ${days} dia${days===1?"":"s"} sem atendimento`,
+      className:"green",
+      detail:`Próximo lembrete em ${15-days} dia${15-days===1?"":"s"}.`
+    };
+    if(days<30)return {
+      label:`Há ${days} dias sem atendimento`,
+      className:"yellow",
+      detail:"Faixa de acompanhamento: 15 a 29 dias."
+    };
+    if(days<45)return {
+      label:`Há ${days} dias sem atendimento`,
+      className:"yellow",
+      detail:"Bom momento para chamar o cliente novamente."
+    };
+    if(days<60)return {
+      label:`Há ${days} dias sem atendimento`,
+      className:"red",
+      detail:"Cliente há bastante tempo sem retornar."
+    };
+    return {
+      label:`Há ${days} dias sem atendimento`,
+      className:"red",
+      detail:"Cliente inativo há 60 dias ou mais."
+    };
+  }
+
   async function renderClientsFinal(adminMode=false){
     panelContent.className="panel-content active";
     let activeFilter="all";
@@ -2026,13 +2139,26 @@ Te esperamos!
       list.innerHTML=`<div class="loading">Carregando clientes...</div>`;
 
       try{
-        const {data,error}=await supabase.rpc("search_clients_dashboard",{
-          p_query:q,
-          p_filter:activeFilter
-        });
-        if(error)throw error;
+        const [clientResult,appointmentResult]=await Promise.all([
+          supabase.rpc("search_clients_dashboard",{p_query:q,p_filter:activeFilter}),
+          supabase.rpc("list_dashboard_appointments")
+        ]);
+        if(clientResult.error)throw clientResult.error;
+        if(appointmentResult.error)throw appointmentResult.error;
 
-        const rows=data||[];
+        const rows=clientResult.data||[];
+        const allAppointments=appointmentResult.data||[];
+        const lastCompletedByClient={};
+
+        allAppointments
+          .filter(a=>a.status==="completed" && a.client_id && a.appointment_date)
+          .forEach(a=>{
+            const key=String(a.client_id);
+            if(!lastCompletedByClient[key] || a.appointment_date>lastCompletedByClient[key]){
+              lastCompletedByClient[key]=a.appointment_date;
+            }
+          });
+
         list.innerHTML="";
 
         if(!rows.length){
@@ -2041,6 +2167,10 @@ Te esperamos!
         }
 
         rows.forEach(c=>{
+          const lastCompletedDate=lastCompletedByClient[String(c.id)]||null;
+          const inactiveDays=daysBetweenDates(lastCompletedDate);
+          const reminder=inactivityReminder(inactiveDays);
+
           const item=document.createElement("div");
           item.className="client-card";
           item.innerHTML=`
@@ -2062,7 +2192,13 @@ Te esperamos!
               <div class="client-metric"><small>Faltas</small><strong>${Number(c.no_show_count||0)}</strong></div>
               <div class="client-metric"><small>Cancelados</small><strong>${Number(c.cancelled_count||0)}</strong></div>
               <div class="client-metric"><small>Total gasto</small><strong>${money(c.total_paid||0)}</strong></div>
-              <div class="client-metric"><small>Último agendamento</small><strong>${c.last_appointment_date?escapeHtml(formatDate(c.last_appointment_date)):"—"}</strong></div>
+              <div class="client-metric"><small>Último agendamento</small><strong>${c.last_appointment_date?escapeHtml(weekDayName(c.last_appointment_date).replace(/^./,m=>m.toUpperCase())):"—"}</strong></div>
+            </div>
+
+            <div style="margin:10px 0;padding:10px 12px;border:1px solid #e7e7e7;border-radius:12px;background:#fafafa">
+              <div><strong>⏰ Lembrete do cliente:</strong> <span class="pill ${reminder.className}">${escapeHtml(reminder.label)}</span></div>
+              <div class="muted" style="margin-top:5px">${escapeHtml(reminder.detail)}</div>
+              ${lastCompletedDate?`<div class="muted">Último atendimento concluído: ${escapeHtml(formatDateWithWeekday(lastCompletedDate))}</div>`:""}
             </div>
 
             <div class="muted"><strong>Motivo da faixa:</strong> ${escapeHtml(c.tag_reason||"Não informado")}</div>
@@ -2162,6 +2298,11 @@ Te esperamos!
 
       const rows=data?.appointments||[];
       const summary=data?.summary||{};
+      const weekday = v=>{
+        if(!v) return "—";
+        const d=weekDayName(v);
+        return d ? d.charAt(0).toUpperCase()+d.slice(1) : "—";
+      };
 
       panelContent.innerHTML=`
         <div class="panel-content-head">
@@ -2172,11 +2313,40 @@ Te esperamos!
           <button id="backToClients" class="btn btn-light">← Voltar para clientes</button>
         </div>
 
+        <div class="card" style="margin-bottom:16px">
+          <h3>👤 Cadastro do cliente</h3>
+          <div class="info-grid">
+            <div>
+              <strong>WhatsApp</strong>
+              <div class="muted">${escapeHtml(c.phone||"—")}</div>
+            </div>
+            <div>
+              <strong>Faixa</strong>
+              <div style="margin-top:6px">
+                <span class="pill">${tagLabel(c.tag_color)}</span>
+              </div>
+            </div>
+            <div>
+              <strong>Motivo da faixa</strong>
+              <div class="muted">${escapeHtml(c.tag_reason||"Não informado")}</div>
+            </div>
+            <div>
+              <strong>Observação</strong>
+              <div class="muted">${escapeHtml(c.notes||"—")}</div>
+            </div>
+          </div>
+
+          <div class="action-row" style="margin-top:14px">
+            <button id="editClientDetails" class="btn btn-light">✏️ Editar nome, faixa e observação</button>
+            ${currentProfile?.role==="admin" ? `<button id="clearClientHistory" class="btn btn-danger">🧹 Limpar histórico de teste</button>` : ""}
+          </div>
+        </div>
+
         <div class="stats-grid">
           <div class="stat"><small>Total consumido</small><strong>${money(summary.total_spent||0)}</strong></div>
           <div class="stat"><small>Atendimentos concluídos</small><strong>${Number(summary.completed_count||0)}</strong></div>
           <div class="stat"><small>Ticket médio</small><strong>${money(summary.average_ticket||0)}</strong></div>
-          <div class="stat"><small>Último atendimento</small><strong style="font-size:16px">${summary.last_date?escapeHtml(formatDate(summary.last_date)):"—"}</strong></div>
+          <div class="stat"><small>Último atendimento</small><strong style="font-size:16px">${weekday(summary.last_date)}</strong></div>
         </div>
 
         <div class="card" style="margin-top:16px">
@@ -2191,7 +2361,7 @@ Te esperamos!
         wrap.innerHTML=`<div class="list">${rows.map(r=>`
           <div class="list-item">
             <strong>${escapeHtml(r.service_name||"Procedimento")}</strong>
-            <div class="muted">📅 ${escapeHtml(formatDate(r.appointment_date))} às ${(r.start_time||"").slice(0,5)}</div>
+            <div class="muted">📅 ${weekday(r.appointment_date)} às ${(r.start_time||"").slice(0,5)}</div>
             <div class="muted">💈 ${escapeHtml(r.barber_name||"—")}</div>
             <div>Valor cobrado: <strong>${money(r.price_charged||0)}</strong></div>
             <div>Valor pago: <strong>${money(r.amount_paid||0)}</strong> • ${escapeHtml(paymentLabel(r.payment_method||""))}</div>
@@ -2199,6 +2369,69 @@ Te esperamos!
       }
 
       document.getElementById("backToClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
+
+      document.getElementById("editClientDetails").onclick=async()=>{
+        const name=prompt("Nome e sobrenome:",c.full_name||"");
+        if(name===null)return;
+        if(!hasFullName(name)){alert("Informe nome e sobrenome.");return;}
+
+        const notes=prompt("Observação específica deste cliente:",c.notes||"");
+        if(notes===null)return;
+
+        const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");
+        if(tag===null)return;
+        const tagValue=tag.trim().toLowerCase();
+        if(!["","green","yellow","red"].includes(tagValue)){
+          alert("Use green, yellow, red ou deixe vazio.");
+          return;
+        }
+
+        const reason=prompt("Motivo da faixa:",c.tag_reason||"");
+        if(reason===null)return;
+
+        try{
+          const {error}=await supabase.rpc("update_client_profile",{
+            p_client_id:c.id,
+            p_full_name:name,
+            p_phone:c.phone,
+            p_tag_color:tagValue||null,
+            p_notes:notes||null,
+            p_tag_reason:reason||null
+          });
+          if(error)throw error;
+
+          c={...c,full_name:name,tag_color:tagValue||null,notes:notes||null,tag_reason:reason||null};
+          alert("Cadastro do cliente atualizado.");
+          renderClientTimeline(c);
+        }catch(e){
+          console.error(e);
+          alert(e.message||"Não foi possível atualizar o cliente.");
+        }
+      };
+
+      document.getElementById("clearClientHistory")?.addEventListener("click",async()=>{
+        const ok=confirm(
+          `Limpar TODO o histórico de ${c.full_name||"cliente"}?\n\n`+
+          `Isso apaga agendamentos, atendimentos concluídos e lançamentos financeiros ligados a esses agendamentos.\n`+
+          `O cadastro do cliente, nome, telefone, faixa e observação serão mantidos.\n\n`+
+          `Use principalmente para limpar testes.`
+        );
+        if(!ok)return;
+
+        const confirmText=prompt('Digite LIMPAR para confirmar:');
+        if(confirmText!=="LIMPAR")return;
+
+        try{
+          const {error}=await supabase.rpc("clear_client_history",{p_client_id:Number(c.id)});
+          if(error)throw error;
+          alert("Histórico limpo. O cadastro do cliente foi mantido.");
+          renderClientTimeline(c);
+        }catch(e){
+          console.error(e);
+          alert(e.message||"Não foi possível limpar o histórico.");
+        }
+      });
+
     }catch(e){
       console.error(e);
       panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o histórico.</strong><br>${escapeHtml(e?.message||"")}</div>`;
