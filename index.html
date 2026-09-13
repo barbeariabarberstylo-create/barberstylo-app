@@ -1644,146 +1644,322 @@ Te esperamos!
 
   async function renderToday(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="loading">Carregando painel de hoje...</div>`;
+    panelContent.innerHTML=`<div class="loading">Carregando agenda visual...</div>`;
 
     try{
-      const [allResult,returnResult]=await Promise.all([
-        supabase.rpc("list_dashboard_appointments"),
-        supabase.rpc("list_returns_dashboard",{p_horizon_days:30})
-      ]);
-      if(allResult.error)throw allResult.error;
+      const {data:allData,error:allError}=await supabase.rpc("list_dashboard_appointments");
+      if(allError)throw allError;
 
-      const all=(allResult.data||[]).sort((a,b)=>{
-        const da=`${a.appointment_date||""} ${a.start_time||""}`;
-        const db=`${b.appointment_date||""} ${b.start_time||""}`;
-        return da.localeCompare(db);
-      });
-      const returns=returnResult.error?[]:(returnResult.data||[]);
-
+      const all=allData||[];
       const now=new Date();
-      const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-      const monthPrefix=today.slice(0,7);
+      const isoLocal=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      const today=isoLocal(now);
 
-      const mine=all.filter(a=>adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id));
-      const myReturns=returns.filter(r=>adminMode||!r.barber_id||Number(r.barber_id)===Number(currentProfile?.barber_id));
+      const makeDate=(offset)=>{
+        const d=new Date(now);
+        d.setDate(d.getDate()+offset);
+        return isoLocal(d);
+      };
 
-      const waitingAll=mine
-        .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
-        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+      const dayDates=Array.from({length:7},(_,i)=>makeDate(i));
+      let selectedDate=today;
 
-      const todayAppointments=mine
-        .filter(a=>a.appointment_date===today && !["cancelled"].includes(a.status))
-        .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
+      let selectedAdminBarber = adminMode
+        ? Number(barbers?.[0]?.id||0)
+        : Number(currentProfile?.barber_id||0);
 
-      const todayConfirmed=todayAppointments
-        .filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status))
-        .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
+      const statusText=s=>({
+        pending:"Pendente",
+        awaiting_confirmation:"Aguardando confirmação",
+        confirmed:"Confirmado",
+        confirmation_sent:"Confirmação enviada",
+        in_service:"Em atendimento",
+        completed:"Concluído",
+        cancelled:"Cancelado",
+        no_show:"Não compareceu"
+      })[s]||s||"—";
 
-      const todayCompleted=todayAppointments.filter(a=>a.status==="completed");
+      const statusClass=s=>{
+        if(["confirmed","confirmation_sent","in_service"].includes(s))return "green";
+        if(["pending","awaiting_confirmation"].includes(s))return "yellow";
+        if(["cancelled","no_show"].includes(s))return "red";
+        return "";
+      };
 
-      const monthCompleted=mine.filter(a=>
-        a.status==="completed" &&
-        String(a.appointment_date||"").startsWith(monthPrefix)
-      );
+      const getAppointmentsFor=(barberId,date)=>{
+        return all
+          .filter(a=>
+            Number(a.barber_id)===Number(barberId) &&
+            a.appointment_date===date &&
+            a.status!=="cancelled"
+          )
+          .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
+      };
 
-      const confirmedFuture=mine
-        .filter(a=>a.appointment_date>=today && ["confirmed","confirmation_sent","in_service"].includes(a.status))
-        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+      const weekdayShort=date=>{
+        const d=new Date(`${date}T12:00:00`);
+        return d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".","");
+      };
 
-      const todayReturns=myReturns.filter(r=>Number(r.days_until_return)===0);
-      const overdueReturns=myReturns.filter(r=>Number(r.days_until_return)<0);
-      const next7Returns=myReturns.filter(r=>Number(r.days_until_return)>0 && Number(r.days_until_return)<=7);
+      const dayNumber=date=>{
+        const d=new Date(`${date}T12:00:00`);
+        return String(d.getDate()).padStart(2,"0");
+      };
 
-      const nextToday=todayConfirmed[0]||null;
+      const dayLabel=date=>{
+        if(date===today)return "Hoje";
+        if(date===makeDate(1))return "Amanhã";
+        const d=new Date(`${date}T12:00:00`);
+        return d.toLocaleDateString("pt-BR",{weekday:"long"});
+      };
 
       panelContent.innerHTML=`
         <div class="panel-content-head">
           <div>
-            <h2>☀️ Hoje — ${formatDateWithWeekday(today)}</h2>
-            <p class="muted">${adminMode?"Resumo completo da barbearia.":"Seu painel rápido para começar o dia."}</p>
+            <h2>📅 Minha agenda</h2>
+            <p class="muted">Veja os horários livres, ocupados e os clientes de cada dia.</p>
           </div>
-          <button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button>
+          <button id="openFullAgenda" class="btn btn-light">Agenda completa</button>
         </div>
 
-        <div class="stats-grid">
-          <div class="stat"><small>Confirmados hoje</small><strong>${todayConfirmed.length}</strong></div>
-          <div class="stat"><small>Atendidos hoje</small><strong>${todayCompleted.length}</strong></div>
-          <div class="stat"><small>Atendidos no mês</small><strong>${monthCompleted.length}</strong></div>
-          <div class="stat"><small>Retornos hoje</small><strong>${todayReturns.length}</strong></div>
-          <div class="stat"><small>Retornos atrasados</small><strong>${overdueReturns.length}</strong></div>
-          <div class="stat"><small>Aguardando confirmação</small><strong>${waitingAll.length}</strong></div>
+        ${adminMode?`
+          <div class="card" style="margin-bottom:14px">
+            <label><strong>Barbeiro</strong></label>
+            <select id="todayBarberSelect" style="margin-top:6px;max-width:320px">
+              ${barbers.map(b=>`<option value="${b.id}" ${Number(b.id)===selectedAdminBarber?"selected":""}>${escapeHtml(b.name)}</option>`).join("")}
+            </select>
+          </div>`:""}
+
+        <div class="card">
+          <h3 style="margin-top:0">Escolha o dia</h3>
+          <div id="visualDayTabs" style="
+            display:grid;
+            grid-template-columns:repeat(7,minmax(82px,1fr));
+            gap:8px;
+            overflow-x:auto;
+            padding-bottom:4px;
+          "></div>
         </div>
 
-        <div class="card" style="margin-top:16px">
-          <h3>✅ Horários confirmados de hoje</h3>
-          <p class="muted">${nextToday?`Próximo: ${(nextToday.start_time||"").slice(0,5)} • ${escapeHtml(nextToday.client_name||"Cliente")}`:"Nenhum horário confirmado para hoje."}</p>
-          <div id="todayConfirmedHome" class="list"></div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
-          <h3>🔁 Retornos</h3>
-          <div class="stats-grid" style="margin-top:10px">
-            <div class="stat"><small>Hoje</small><strong>${todayReturns.length}</strong></div>
-            <div class="stat"><small>Atrasados</small><strong>${overdueReturns.length}</strong></div>
-            <div class="stat"><small>Próximos 7 dias</small><strong>${next7Returns.length}</strong></div>
+        <div class="card" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+            <div>
+              <h3 id="visualScheduleTitle" style="margin:0"></h3>
+              <p class="muted" id="visualScheduleSubtitle" style="margin:5px 0 0"></p>
+            </div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;font-size:13px">
+              <span class="pill green">Livre</span>
+              <span class="pill yellow">Aguardando</span>
+              <span class="pill">Confirmado/Ocupado</span>
+              <span class="pill red">Bloqueado</span>
+            </div>
           </div>
-          <div id="homeReturnsList" class="list" style="margin-top:12px"></div>
-          <button id="openReturnsHome" class="btn btn-light" style="margin-top:12px">Ver todos os retornos</button>
+
+          <div id="visualSlots" style="
+            display:grid;
+            grid-template-columns:repeat(auto-fill,minmax(125px,1fr));
+            gap:9px;
+            margin-top:15px;
+          "></div>
         </div>
 
-        <div class="card" style="margin-top:16px">
-          <h3>🔔 Aguardando confirmação</h3>
-          <p class="muted">Solicitações de hoje e dos próximos dias.</p>
-          <div id="waitingAllList" class="list"></div>
+        <div class="card" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+            <div>
+              <h3 id="dayClientsTitle" style="margin:0">Clientes do dia</h3>
+              <p id="dayClientsSummary" class="muted" style="margin:5px 0 0"></p>
+            </div>
+          </div>
+          <div id="dayClientsList" class="list" style="margin-top:12px"></div>
         </div>
 
-        <div class="card" style="margin-top:16px">
-          <h3>📆 Próximos confirmados</h3>
-          <div id="confirmedFutureList" class="list"></div>
-        </div>`;
+        <div class="stats-grid" id="dayStats" style="margin-top:14px"></div>
+      `;
 
-      const todayConfirmedList=document.getElementById("todayConfirmedHome");
-      todayConfirmed.forEach(a=>todayConfirmedList.appendChild(appointmentItem(a,adminMode)));
-      if(!todayConfirmed.length) todayConfirmedList.innerHTML=`<div class="empty">Nenhum horário confirmado para hoje.</div>`;
+      const tabs=document.getElementById("visualDayTabs");
 
-      const homeReturns=document.getElementById("homeReturnsList");
-      const priorityReturns=[...overdueReturns,...todayReturns,...next7Returns].slice(0,6);
-      if(!priorityReturns.length){
-        homeReturns.innerHTML=`<div class="empty">Nenhum retorno urgente nos próximos 7 dias.</div>`;
-      }else{
-        priorityReturns.forEach(r=>{
-          const days=Number(r.days_until_return);
-          const line=document.createElement("div");
-          line.className="list-item";
-          line.innerHTML=`
-            <strong>${escapeHtml(r.client_name||"Cliente")}</strong>
-            <div class="muted">${escapeHtml(r.service_name||"Procedimento")} • ${
-              days<0?`atrasado ${Math.abs(days)} dia${Math.abs(days)===1?"":"s"}`:
-              days===0?"retorno hoje":`retorno em ${days} dia${days===1?"":"s"}`
-            }</div>
-            ${r.client_phone?`<button class="btn-small btn-light home-return-wa">💬 WhatsApp</button>`:""}`;
-          line.querySelector(".home-return-wa")?.addEventListener("click",()=>{
-            const phone=phoneForWhatsapp(r.client_phone);
-            const text=`Olá, ${r.client_name||"cliente"}! Tudo bem? Está na hora do seu retorno na BarberStylo. Quer reservar seu próximo horário?`;
-            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
-          });
-          homeReturns.appendChild(line);
+      function renderTabs(){
+        tabs.innerHTML="";
+        dayDates.forEach(date=>{
+          const appointments=getAppointmentsFor(selectedAdminBarber,date);
+          const activeCount=appointments.filter(a=>!["completed","no_show"].includes(a.status)).length;
+
+          const btn=document.createElement("button");
+          btn.type="button";
+          btn.style.minWidth="82px";
+          btn.style.padding="10px 8px";
+          btn.style.borderRadius="14px";
+          btn.style.border=date===selectedDate?"2px solid #111":"1px solid #ddd";
+          btn.style.background=date===selectedDate?"#111":"#fff";
+          btn.style.color=date===selectedDate?"#fff":"#111";
+          btn.style.cursor="pointer";
+          btn.innerHTML=`
+            <div style="font-size:12px;text-transform:capitalize">${escapeHtml(weekdayShort(date))}</div>
+            <div style="font-size:22px;font-weight:800;line-height:1.2">${dayNumber(date)}</div>
+            <div style="font-size:11px;margin-top:3px">${activeCount} marcado${activeCount===1?"":"s"}</div>
+          `;
+          btn.onclick=()=>{
+            selectedDate=date;
+            renderTabs();
+            loadSelectedDay();
+          };
+          tabs.appendChild(btn);
         });
       }
 
-      const waitingList=document.getElementById("waitingAllList");
-      waitingAll.slice(0,8).forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
-      if(!waitingAll.length) waitingList.innerHTML=`<div class="empty">Nenhum agendamento aguardando confirmação.</div>`;
+      async function loadSelectedDay(){
+        const barberId=selectedAdminBarber;
+        const appointments=getAppointmentsFor(barberId,selectedDate);
 
-      const confirmedList=document.getElementById("confirmedFutureList");
-      confirmedFuture.slice(0,8).forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
-      if(!confirmedFuture.length) confirmedList.innerHTML=`<div class="empty">Nenhum próximo horário confirmado.</div>`;
+        const {data:scheduleData,error:scheduleError}=await supabase.rpc("get_barber_day_schedule",{
+          p_barber_id:barberId,
+          p_date:selectedDate
+        });
+        if(scheduleError)throw scheduleError;
+
+        const day=scheduleData?.[0]||{};
+        const slots=Array.isArray(day.slots)?day.slots:[];
+
+        const apptByTime={};
+        appointments.forEach(a=>{
+          const key=String(a.start_time||"").slice(0,5);
+          if(key)apptByTime[key]=a;
+        });
+
+        document.getElementById("visualScheduleTitle").textContent=
+          `${dayLabel(selectedDate)} — ${formatDateWithWeekday(selectedDate)}`;
+
+        document.getElementById("visualScheduleSubtitle").textContent=
+          day.day_mode==="off"
+            ? "Este dia está fechado."
+            : `${String(day.start_time||"09:00").slice(0,5)} às ${String(day.end_time||"20:00").slice(0,5)}`;
+
+        const slotWrap=document.getElementById("visualSlots");
+        slotWrap.innerHTML="";
+
+        if(!slots.length){
+          slotWrap.innerHTML=`<div class="empty" style="grid-column:1/-1">Nenhum horário disponível para este dia.</div>`;
+        }else{
+          slots.forEach(s=>{
+            const time=String(s.time||"").slice(0,5);
+            const appt=apptByTime[time];
+            const isWaiting=appt && ["pending","awaiting_confirmation"].includes(appt.status);
+            const isConfirmed=appt && ["confirmed","confirmation_sent","in_service"].includes(appt.status);
+            const isCompleted=appt && appt.status==="completed";
+
+            let label="Livre";
+            let icon="✓";
+            let bg="#f7fff8";
+            let border="#b7dfbf";
+            let extra="Disponível";
+
+            if(s.status==="blocked"){
+              label="Bloqueado";
+              icon="×";
+              bg="#fff5f5";
+              border="#efc5c5";
+              extra="Indisponível";
+            }else if(s.status==="occupied" || appt){
+              if(isWaiting){
+                label="Aguardando";
+                icon="!";
+                bg="#fffbea";
+                border="#e4d28e";
+              }else if(isCompleted){
+                label="Concluído";
+                icon="✓";
+                bg="#f4f4f4";
+                border="#d8d8d8";
+              }else{
+                label="Ocupado";
+                icon="•";
+                bg="#f1f1f1";
+                border="#cfcfcf";
+              }
+              extra=appt?.client_name||"Horário ocupado";
+            }
+
+            const btn=document.createElement("button");
+            btn.type="button";
+            btn.style.cssText=`
+              text-align:left;
+              min-height:78px;
+              padding:10px 11px;
+              border-radius:13px;
+              border:1px solid ${border};
+              background:${bg};
+              cursor:${appt?"pointer":"default"};
+            `;
+            btn.innerHTML=`
+              <div style="font-size:18px;font-weight:800">${escapeHtml(time)}</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">${icon} ${escapeHtml(label)}</div>
+              <div style="font-size:11px;color:#666;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(extra)}</div>
+            `;
+            if(appt){
+              btn.onclick=()=>{
+                document.getElementById(`appt-day-${appt.id}`)?.scrollIntoView({behavior:"smooth",block:"center"});
+              };
+            }
+            slotWrap.appendChild(btn);
+          });
+        }
+
+        const confirmed=appointments.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
+        const waiting=appointments.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
+        const completed=appointments.filter(a=>a.status==="completed");
+        const noShow=appointments.filter(a=>a.status==="no_show");
+
+        document.getElementById("dayClientsSummary").textContent=
+          appointments.length
+            ? `${appointments.length} cliente${appointments.length===1?"":"s"} neste dia`
+            : "Nenhum cliente agendado neste dia";
+
+        const clientsList=document.getElementById("dayClientsList");
+        clientsList.innerHTML="";
+
+        if(!appointments.length){
+          clientsList.innerHTML=`<div class="empty">Nenhum nome na agenda deste dia.</div>`;
+        }else{
+          appointments.forEach(a=>{
+            const row=document.createElement("div");
+            row.className="list-item";
+            row.id=`appt-day-${a.id}`;
+            row.innerHTML=`
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+                <div style="min-width:0">
+                  <div style="font-size:18px;font-weight:800">${escapeHtml((a.start_time||"").slice(0,5))} — ${escapeHtml(a.client_name||"Cliente")}</div>
+                  <div class="muted" style="margin-top:4px">${escapeHtml(a.service_name||"Serviço")}</div>
+                  ${adminMode?`<div class="muted">${escapeHtml(a.barber_name||"")}</div>`:""}
+                </div>
+                <span class="pill ${statusClass(a.status)}">${escapeHtml(statusText(a.status))}</span>
+              </div>
+            `;
+            clientsList.appendChild(row);
+          });
+        }
+
+        document.getElementById("dayStats").innerHTML=`
+          <div class="stat"><small>Confirmados</small><strong>${confirmed.length}</strong></div>
+          <div class="stat"><small>Aguardando</small><strong>${waiting.length}</strong></div>
+          <div class="stat"><small>Concluídos</small><strong>${completed.length}</strong></div>
+          <div class="stat"><small>Faltas</small><strong>${noShow.length}</strong></div>
+        `;
+      }
+
+      renderTabs();
+      await loadSelectedDay();
+
+      document.getElementById("todayBarberSelect")?.addEventListener("change",async e=>{
+        selectedAdminBarber=Number(e.target.value);
+        renderTabs();
+        await loadSelectedDay();
+      });
 
       document.getElementById("openFullAgenda")?.addEventListener("click",()=>renderAgenda(adminMode));
-      document.getElementById("openReturnsHome")?.addEventListener("click",()=>renderReturns(adminMode));
+
     }catch(e){
       console.error(e);
-      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o painel.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
+      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar a agenda visual.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
     }
   }
 
