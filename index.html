@@ -1624,12 +1624,106 @@ Gostaria de confirmar meu agendamento.`;
   async function renderNewAttendance(adminMode=false){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Novo atendimento manual</h2><p class="muted">Para cliente que veio pelo WhatsApp, indicação ou presencialmente.</p></div></div>
-      <div class="list-item"><div class="form-grid">${adminMode?`<div><label>Barbeiro</label><select id="manualBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<div><label>Nome e sobrenome *</label><input id="manualName"></div><div><label>WhatsApp *</label><input id="manualPhone"></div><div><label>Serviço/procedimento *</label><input id="manualService" placeholder="Ex.: Degradê"></div><div><label>Data *</label><input id="manualDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Horário</label><input id="manualTime" type="time"></div><div><label>Valor cobrado</label><input id="manualCharged" type="number" step="0.01"></div><div><label>Valor pago</label><input id="manualPaid" type="number" step="0.01"></div><div><label>Pagamento</label><select id="manualPayment"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="package">Pacote</option><option value="courtesy">Cortesia</option><option value="pending">Pendente</option></select></div><div><label>Faixa do cliente</label><select id="manualTag"><option value="">Sem faixa</option><option value="green">🟢 Verde</option><option value="yellow">🟡 Amarela</option><option value="red">🔴 Vermelha</option></select></div><div class="full"><label>Observação</label><textarea id="manualNotes"></textarea></div></div><button id="saveManualAttendance" class="btn btn-dark">Salvar atendimento</button></div>`;
+      <div class="list-item"><div class="form-grid">
+        ${adminMode?`<div><label>Barbeiro</label><select id="manualBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}
+        <div><label>Nome e sobrenome *</label><input id="manualName"></div>
+        <div><label>WhatsApp *</label><input id="manualPhone"></div>
+        <div><label>Serviço/procedimento *</label><select id="manualService"><option value="">Carregando procedimentos...</option></select></div>
+        <div id="manualOtherServiceWrap" style="display:none"><label>Outro serviço/procedimento</label><input id="manualOtherService" placeholder="Digite o nome"></div>
+        <div><label>Data *</label><input id="manualDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div><label>Horário</label><input id="manualTime" type="time"></div>
+        <div><label>Valor cobrado</label><input id="manualCharged" type="number" step="0.01"></div>
+        <div><label>Valor pago</label><input id="manualPaid" type="number" step="0.01"></div>
+        <div><label>Pagamento</label><select id="manualPayment"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="package">Pacote</option><option value="courtesy">Cortesia</option><option value="pending">Pendente</option></select></div>
+        <div><label>Faixa do cliente</label><select id="manualTag"><option value="">Sem faixa</option><option value="green">🟢 Verde</option><option value="yellow">🟡 Amarela</option><option value="red">🔴 Vermelha</option></select></div>
+        <div class="full"><label>Motivo da faixa</label><input id="manualTagReason" placeholder="Ex.: cliente fiel e pontual / faltou sem avisar / atenção com pagamentos"></div>
+        <div class="full"><label>Observação</label><textarea id="manualNotes"></textarea></div>
+      </div><button id="saveManualAttendance" class="btn btn-dark">Salvar atendimento</button></div>`;
+
+    let manualServices=[];
+
+    async function loadManualServices(){
+      const barberId=adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id);
+      const select=document.getElementById("manualService");
+      select.innerHTML=`<option value="">Carregando procedimentos...</option>`;
+      try{
+        const {data,error}=await supabase.rpc("list_barber_services",{p_barber_id:barberId});
+        if(error) throw error;
+        manualServices=(data||[]).filter(s=>s.active!==false);
+        select.innerHTML=`<option value="">Selecione um procedimento</option>`+
+          manualServices.map(s=>`<option value="${s.id}">${escapeHtml(s.service_name)} • ${money(s.price)}</option>`).join("")+
+          `<option value="other">Outro / escrever manualmente</option>`;
+      }catch(e){
+        console.error(e);
+        select.innerHTML=`<option value="other">Outro / escrever manualmente</option>`;
+      }
+    }
+
+    document.getElementById("manualBarber")?.addEventListener("change",loadManualServices);
+
+    document.getElementById("manualService").addEventListener("change",()=>{
+      const select=document.getElementById("manualService");
+      const wrap=document.getElementById("manualOtherServiceWrap");
+      wrap.style.display=select.value==="other"?"block":"none";
+      const service=manualServices.find(s=>String(s.id)===String(select.value));
+      if(service){
+        document.getElementById("manualCharged").value=Number(service.price||0).toFixed(2);
+      }
+    });
+
+    document.getElementById("manualTag").addEventListener("change",()=>{
+      const reason=document.getElementById("manualTagReason");
+      if(!document.getElementById("manualTag").value) reason.value="";
+    });
+
     document.getElementById("saveManualAttendance").onclick=async()=>{
-      const name=document.getElementById("manualName").value.trim(),phone=normalizePhone(document.getElementById("manualPhone").value);if(!hasFullName(name)||phone.length<10){alert("Informe nome e sobrenome e um WhatsApp válido.");return}
-      const payload={barber_id:adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id),client_name:name,client_phone:phone,service_name:document.getElementById("manualService").value.trim(),appointment_date:document.getElementById("manualDate").value,start_time:document.getElementById("manualTime").value||"00:00",price_charged:Number(document.getElementById("manualCharged").value||0),amount_paid:document.getElementById("manualPayment").value==="courtesy"?0:Number(document.getElementById("manualPaid").value||0),payment_method:document.getElementById("manualPayment").value,status:"completed",notes:document.getElementById("manualNotes").value.trim()||null,completed_at:new Date().toISOString(),next_return_date:addDays(document.getElementById("manualDate").value,15)};
-      try{ const {error}=await supabase.rpc("create_manual_attendance",{p_payload:payload,p_client_tag:document.getElementById("manualTag").value||null});if(error)throw error;alert("Cliente e atendimento cadastrados.");renderNewAttendance(adminMode);}catch(e){console.error(e);alert("A tela está pronta. Falta executar o SQL final para habilitar o cadastro manual.");}
+      const name=document.getElementById("manualName").value.trim();
+      const phone=normalizePhone(document.getElementById("manualPhone").value);
+      if(!hasFullName(name)||phone.length<10){alert("Informe nome e sobrenome e um WhatsApp válido.");return}
+
+      const selected=document.getElementById("manualService").value;
+      const service=manualServices.find(s=>String(s.id)===String(selected));
+      const serviceName=selected==="other"
+        ? document.getElementById("manualOtherService").value.trim()
+        : (service?.service_name||"");
+
+      if(!serviceName){alert("Selecione um serviço/procedimento.");return}
+
+      const tag=document.getElementById("manualTag").value||null;
+      const tagReason=document.getElementById("manualTagReason").value.trim()||null;
+
+      const payload={
+        barber_id:adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id),
+        client_name:name,
+        client_phone:phone,
+        service_name:serviceName,
+        appointment_date:document.getElementById("manualDate").value,
+        start_time:document.getElementById("manualTime").value||"00:00",
+        price_charged:Number(document.getElementById("manualCharged").value||0),
+        amount_paid:document.getElementById("manualPayment").value==="courtesy"?0:Number(document.getElementById("manualPaid").value||0),
+        payment_method:document.getElementById("manualPayment").value,
+        status:"completed",
+        notes:document.getElementById("manualNotes").value.trim()||null,
+        completed_at:new Date().toISOString(),
+        next_return_date:addDays(document.getElementById("manualDate").value,15)
+      };
+
+      try{
+        const {error}=await supabase.rpc("create_manual_attendance",{
+          p_payload:payload,
+          p_client_tag:tag,
+          p_client_tag_reason:tagReason
+        });
+        if(error)throw error;
+        alert("Cliente e atendimento cadastrados.");
+        renderNewAttendance(adminMode);
+      }catch(e){
+        console.error(e);
+        alert(e.message||"Não foi possível salvar o atendimento.");
+      }
     };
+
+    await loadManualServices();
   }
 
   async function renderClientsFinal(adminMode=false){
@@ -1637,8 +1731,8 @@ Gostaria de confirmar meu agendamento.`;
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Clientes</h2><p class="muted">Busque por nome ou WhatsApp. Edite faixa, observações, bloqueio e histórico.</p></div></div><div class="search-row"><div><label>Pesquisar</label><input id="clientSearchFinal" placeholder="Nome ou WhatsApp"></div><button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button></div><div id="clientFinalList" class="list" style="margin-top:14px"></div>`;
     async function run(){
       const q=document.getElementById("clientSearchFinal").value.trim(); const list=document.getElementById("clientFinalList"); list.innerHTML=`<div class="loading">Buscando...</div>`;
-      try{const {data,error}=await supabase.rpc("search_clients_full",{p_query:q});if(error)throw error;list.innerHTML="";(data||[]).forEach(c=>{const item=document.createElement("div");item.className="list-item";item.innerHTML=`<strong><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||c.name||"Cliente")}</strong><div class="muted">WhatsApp: ${escapeHtml(c.phone||"—")}</div><div>${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'} <span class="pill">${tagLabel(c.tag_color)}</span></div><div class="muted">Atendimentos: ${c.appointment_count||0} • Total pago: ${money(c.total_paid||0)} • Faltas: ${c.no_show_count||0}</div><div class="muted">Observação: ${escapeHtml(c.notes||"—")}</div><div class="action-row"><button class="btn-small btn-light edit-client">Editar</button><button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button><button class="btn-small btn-light history-client">Histórico</button>${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}</div>`;
-      item.querySelector(".edit-client").onclick=async()=>{const name=prompt("Nome e sobrenome:",c.full_name||c.name||"");if(name===null)return;if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}const notes=prompt("Observações:",c.notes||"");const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");try{const {error}=await supabase.rpc("update_client_profile",{p_client_id:c.id,p_full_name:name,p_phone:c.phone,p_tag_color:tag||null,p_notes:notes||null});if(error)throw error;run()}catch(e){alert("Falta habilitar a atualização final do banco.")}};
+      try{const {data,error}=await supabase.rpc("search_clients_full",{p_query:q});if(error)throw error;list.innerHTML="";(data||[]).forEach(c=>{const item=document.createElement("div");item.className="list-item";item.innerHTML=`<strong><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||c.name||"Cliente")}</strong><div class="muted">WhatsApp: ${escapeHtml(c.phone||"—")}</div><div>${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'} <span class="pill">${tagLabel(c.tag_color)}</span></div><div class="muted"><strong>Motivo da faixa:</strong> ${escapeHtml(c.tag_reason||"Não informado")}</div><div class="muted">Atendimentos: ${c.appointment_count||0} • Total pago: ${money(c.total_paid||0)} • Faltas: ${c.no_show_count||0}</div><div class="muted">Observação: ${escapeHtml(c.notes||"—")}</div><div class="action-row"><button class="btn-small btn-light edit-client">Editar</button><button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button><button class="btn-small btn-light history-client">Histórico</button>${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}</div>`;
+      item.querySelector(".edit-client").onclick=async()=>{const name=prompt("Nome e sobrenome:",c.full_name||c.name||"");if(name===null)return;if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}const notes=prompt("Observações:",c.notes||"");const tag=prompt("Faixa: green, yellow, red ou deixe vazio para sem faixa",c.tag_color||"");if(tag!==null&&!["","green","yellow","red"].includes(tag.trim().toLowerCase())){alert("Use green, yellow, red ou deixe vazio.");return}const tagReason=prompt("Motivo da faixa (por que este cliente recebeu essa faixa?):",c.tag_reason||"");try{const {error}=await supabase.rpc("update_client_profile",{p_client_id:c.id,p_full_name:name,p_phone:c.phone,p_tag_color:(tag||"").trim().toLowerCase()||null,p_notes:notes||null,p_tag_reason:tagReason||null});if(error)throw error;run()}catch(e){alert(e.message||"Não foi possível atualizar o cliente.")}};
       item.querySelector(".block-client").onclick=async()=>{try{const {error}=await supabase.rpc("set_client_blocked",{p_client_id:c.id,p_blocked:!c.blocked});if(error)throw error;run()}catch(e){alert("Falta habilitar bloqueio no banco.")}};
       item.querySelector(".history-client").onclick=()=>renderClientTimeline(c);
       item.querySelector(".archive-client")?.addEventListener("click",async()=>{if(!confirm("Arquivar este cliente? O histórico será preservado."))return;try{const {error}=await supabase.rpc("archive_client",{p_client_id:c.id});if(error)throw error;run()}catch(e){alert("Falta habilitar arquivamento no banco.")}});
@@ -1677,7 +1771,7 @@ Gostaria de confirmar meu agendamento.`;
   async function renderAdminUsers(){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Usuários e acessos</h2><p class="muted">Login por telefone + senha. E-mail de recuperação é opcional.</p></div></div><div class="list-item"><h3>Cadastrar acesso</h3><div class="form-grid"><div><label>Tipo</label><select id="userRole"><option value="barber">Barbeiro</option><option value="admin">Administrador</option></select></div><div><label>Nome</label><input id="userName"></div><div><label>Telefone / WhatsApp</label><input id="userPhone" placeholder="44999999999"></div><div><label>Senha provisória</label><input id="userPassword" type="password" minlength="6"></div><div class="full"><label>E-mail de recuperação (opcional)</label><input id="userRecoveryEmail" type="email"></div></div><button id="createAccessUser" class="btn btn-dark">Cadastrar usuário</button><div class="note" style="margin-top:10px">No primeiro acesso, o usuário poderá mudar a senha agora ou deixar para depois.</div></div><div id="accessUsersList" class="list" style="margin-top:14px"></div>`;
-    async function reload(){try{const body=await callManageBarberUser({action:"list_users"});const out=document.getElementById("accessUsersList");out.innerHTML=(body.users||[]).map(u=>`<div class="list-item"><strong>${escapeHtml(u.name)}</strong><div class="muted">${u.role==="admin"?"Administrador":"Barbeiro"} • ${escapeHtml(u.phone||"—")}</div><div class="muted">Recuperação: ${escapeHtml(u.recovery_email||"Não informado")}</div><div><span class="pill ${u.active?"green":"red"}">${u.active?"ATIVO":"DESATIVADO"}</span></div><div class="action-row"><button class="btn-small btn-light reset-user-pass" data-id="${u.id}" data-role="${u.role}">Redefinir senha</button><button class="btn-small ${u.active?"btn-danger":"btn-light"} toggle-user" data-id="${u.id}" data-role="${u.role}" data-active="${u.active}">${u.active?"Desativar":"Ativar"}</button></div></div>`).join("")||`<div class="empty">Nenhum usuário.</div>`;out.querySelectorAll(".reset-user-pass").forEach(b=>b.onclick=async()=>{const p=prompt("Nova senha provisória (mínimo 6 caracteres):");if(!p||p.length<6)return;try{await callManageBarberUser({action:"set_user_password",profile_id:Number(b.dataset.id),role:b.dataset.role,password:p,force_change:true});alert("Senha redefinida.")}catch(e){alert(e.message)}});out.querySelectorAll(".toggle-user").forEach(b=>b.onclick=async()=>{try{await callManageBarberUser({action:"set_user_active",profile_id:Number(b.dataset.id),role:b.dataset.role,active:b.dataset.active!=="true"});reload()}catch(e){alert(e.message)}})}catch(e){console.error(e);document.getElementById("accessUsersList").innerHTML=`<div class="empty">A interface está pronta. No próximo passo vamos atualizar a Edge Function para usuários por telefone.</div>`}}
+    async function reload(){try{const body=await callManageBarberUser({action:"list_users"});const out=document.getElementById("accessUsersList");out.innerHTML=(body.users||[]).map(u=>`<div class="list-item"><strong>${escapeHtml(u.name||"Usuário")}</strong><div class="muted">${u.role==="admin"?"Administrador":"Barbeiro"} • ${escapeHtml(u.phone||"—")}</div><div class="muted">Recuperação: ${escapeHtml(u.recovery_email||"Não informado")}</div><div><span class="pill ${u.active?"green":"red"}">${u.active?"ATIVO":"DESATIVADO"}</span>${u.force_password_change?` <span class="pill">SENHA PROVISÓRIA</span>`:""}</div><div class="action-row"><button class="btn-small btn-light reset-user-pass" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🔑 Nova senha</button><button class="btn-small ${u.active?"btn-danger":"btn-light"} toggle-user" data-id="${u.id}" data-role="${u.role}" data-active="${u.active}">${u.active?"Desativar":"Ativar"}</button><button class="btn-small btn-danger delete-user" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🗑️ Remover acesso</button></div></div>`).join("")||`<div class="empty">Nenhum usuário com acesso cadastrado.</div>`;out.querySelectorAll(".reset-user-pass").forEach(b=>b.onclick=async()=>{const p=prompt(`Crie uma nova senha provisória para ${b.dataset.name} (mínimo 6 caracteres):`);if(!p||p.length<6)return;try{await callManageBarberUser({action:"set_user_password",profile_id:Number(b.dataset.id),role:b.dataset.role,password:p,force_change:true});alert("Nova senha criada. No próximo login o usuário será convidado a criar a senha pessoal.");reload()}catch(e){alert(e.message)}});out.querySelectorAll(".toggle-user").forEach(b=>b.onclick=async()=>{try{await callManageBarberUser({action:"set_user_active",profile_id:Number(b.dataset.id),role:b.dataset.role,active:b.dataset.active!=="true"});reload()}catch(e){alert(e.message)}});out.querySelectorAll(".delete-user").forEach(b=>b.onclick=async()=>{const ok=confirm(`Remover o acesso de ${b.dataset.name}?\n\nSe for barbeiro, os agendamentos e o histórico serão preservados. Ele apenas não conseguirá mais entrar no painel.`);if(!ok)return;try{const r=await callManageBarberUser({action:"delete_user",profile_id:Number(b.dataset.id),role:b.dataset.role});alert(r.message||"Acesso removido.");reload()}catch(e){alert(e.message)}})}catch(e){console.error(e);document.getElementById("accessUsersList").innerHTML=`<div class="empty">Não foi possível carregar os usuários. Atualize a Edge Function manage-barber-user.</div>`}}
     document.getElementById("createAccessUser").onclick=async()=>{const body={action:"create_user",role:document.getElementById("userRole").value,name:document.getElementById("userName").value.trim(),phone:normalizePhone(document.getElementById("userPhone").value),password:document.getElementById("userPassword").value,recovery_email:document.getElementById("userRecoveryEmail").value.trim()||null,force_change:true};if(!body.name||body.phone.length<10||body.password.length<6){alert("Preencha nome, telefone e senha com pelo menos 6 caracteres.");return}try{await callManageBarberUser(body);alert("Usuário cadastrado.");reload()}catch(e){alert(e.message)}};await reload();
   }
 
