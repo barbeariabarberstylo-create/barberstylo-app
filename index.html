@@ -1547,6 +1547,18 @@ Gostaria de confirmar meu agendamento.`;
   }
   function paymentLabel(v){ return ({pix:"Pix",cash:"Dinheiro",debit:"Débito",credit:"Crédito",package:"Pacote",courtesy:"Cortesia",pending:"Pendente",other:"Outro"})[v]||v||"Não informado"; }
   function tagLabel(v){ return ({green:"Verde",yellow:"Amarela",red:"Vermelha",black:"Preta"})[v]||"Sem faixa"; }
+
+  function clientTagCardStyle(tag){
+    const map={
+      green:{border:"#79c98b",bg:"#f2fbf4",bar:"#2e9b4f"},
+      yellow:{border:"#e7c85e",bg:"#fffbed",bar:"#d2a900"},
+      red:{border:"#e38b8b",bg:"#fff4f4",bar:"#cf2f2f"},
+      black:{border:"#444",bg:"#f6f6f6",bar:"#111"},
+      none:{border:"#dddddd",bg:"#ffffff",bar:"#bbbbbb"}
+    };
+    return map[tag||"none"]||map.none;
+  }
+
   function applyTagSelectStyle(el){
     if(!el)return;
     const styles={
@@ -2615,6 +2627,13 @@ Te esperamos!
           const item=document.createElement("div");
           item.className="client-card";
           item.style.marginBottom="12px";
+
+          const cardTagStyle=clientTagCardStyle(c.tag_color);
+          item.style.border=`2px solid ${cardTagStyle.border}`;
+          item.style.background=cardTagStyle.bg;
+          item.style.boxShadow=`inset 7px 0 0 ${cardTagStyle.bar}`;
+          item.style.transition="border-color .2s ease, background .2s ease";
+
           item.innerHTML=`
             <div class="client-card-head">
               <div style="min-width:0">
@@ -2642,10 +2661,27 @@ Te esperamos!
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px">
-              <div style="padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:12px">
+              <div style="
+                padding:10px 12px;
+                background:${cardTagStyle.bg};
+                border:1px solid ${cardTagStyle.border};
+                border-radius:12px
+              ">
                 <strong>Faixa</strong>
-                <div class="muted">${tagLabel(c.tag_color)}</div>
-                <div class="muted">${escapeHtml(c.tag_reason||"Sem motivo informado")}</div>
+                <div style="margin-top:4px">
+                  <span style="
+                    display:inline-flex;
+                    align-items:center;
+                    gap:6px;
+                    padding:4px 9px;
+                    border-radius:999px;
+                    background:${cardTagStyle.bar};
+                    color:#fff;
+                    font-weight:800;
+                    font-size:12px
+                  ">${tagLabel(c.tag_color)}</span>
+                </div>
+                <div class="muted" style="margin-top:5px">${escapeHtml(c.tag_reason||"Sem motivo informado")}</div>
               </div>
               <div style="padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:12px">
                 <strong>Observação</strong>
