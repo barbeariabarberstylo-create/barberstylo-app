@@ -294,6 +294,43 @@
 </dialog>
 
 
+
+<dialog id="finishAppointmentDialog">
+  <div class="login-box" style="width:min(560px,94vw)">
+    <div class="login-head">
+      <div>
+        <div style="font-size:13px;color:#777;font-weight:700">BARBERSTYLO</div>
+        <h2 style="margin:4px 0 0">💰 Concluir atendimento</h2>
+      </div>
+      <button id="closeFinishAppointmentBtn" class="close-round" type="button">×</button>
+    </div>
+    <div id="finishAppointmentSummary" class="note" style="margin-bottom:14px"></div>
+    <div class="form-grid">
+      <div>
+        <label>Forma de pagamento</label>
+        <select id="finishPaymentMethod">
+          <option value="pix">Pix</option>
+          <option value="cash">Dinheiro</option>
+          <option value="debit">Débito</option>
+          <option value="credit">Crédito</option>
+          <option value="package">Pacote</option>
+          <option value="courtesy">Cortesia</option>
+          <option value="pending">Pendente</option>
+        </select>
+      </div>
+      <div>
+        <label>Valor recebido</label>
+        <input id="finishAmountPaid" type="number" min="0" step="0.01">
+      </div>
+      <div class="full" id="finishCourtesyWrap" style="display:none">
+        <label>Motivo da cortesia</label>
+        <input id="finishCourtesyReason" placeholder="Opcional">
+      </div>
+    </div>
+    <button id="confirmFinishAppointmentBtn" class="btn btn-dark" type="button">✅ Concluir atendimento</button>
+  </div>
+</dialog>
+
 <dialog id="notificationsDialog">
   <div class="login-box" style="width:min(620px,94vw)">
     <div class="login-head">
@@ -702,6 +739,7 @@ Gostaria de confirmar meu agendamento.`;
       barberPanel.style.display = "block";
       adminPanel.style.display = "none";
     }
+    setTimeout(()=>renderToday(profile.role==="admin"),120);
   }
 
   async function updateAppointmentStatus(id,status){
@@ -1570,21 +1608,57 @@ Gostaria de confirmar meu agendamento.`;
     }
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
   }
-  async function finalizeAppointment(a){
-    const method=prompt("Forma de pagamento: pix, dinheiro, debito, credito, pacote, cortesia ou pendente",a.payment_method||"pix"); if(method===null)return;
-    const normalized=method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    const map={pix:"pix",dinheiro:"cash",debito:"debit",credito:"credit",pacote:"package",cortesia:"courtesy",pendente:"pending"};
-    const payment=map[normalized]||normalized;
-    const defaultPaid=payment==="courtesy"?0:Number(a.price_charged||0);
-    const paid=Number(prompt("Quanto foi pago?",String(defaultPaid).replace(".",","))?.replace(",","."));
-    if(!Number.isFinite(paid)){alert("Valor inválido.");return}
-    const courtesyReason=payment==="courtesy" ? (prompt("Motivo da cortesia (opcional):","")||null) : null;
-    try{
-      await updateAppointmentFields(a.id,{status:"completed",payment_method:payment,amount_paid:payment==="courtesy"?0:paid,courtesy_reason:courtesyReason,completed_at:new Date().toISOString(),next_return_date:addDays(a.appointment_date,15)});
-      alert("Atendimento finalizado e registrado.");
-      currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false);
-    }catch(e){console.error(e);alert("O banco ainda precisa da atualização final de pagamentos. Vamos fazer no próximo passo.");}
+  let finishAppointmentTarget=null;
+
+  function finalizeAppointment(a){
+    finishAppointmentTarget=a;
+    const dialog=document.getElementById("finishAppointmentDialog");
+    document.getElementById("finishAppointmentSummary").innerHTML=
+      `<strong>${escapeHtml(a.client_name||"Cliente")}</strong><br>✂️ ${escapeHtml(serviceNameFromAppointment(a))}<br>📅 ${escapeHtml(formatDateTime(a.appointment_date,a.start_time))}<br>Valor cobrado: <strong>${money(a.price_charged||0)}</strong>`;
+    document.getElementById("finishPaymentMethod").value=a.payment_method||"pix";
+    document.getElementById("finishAmountPaid").value=Number(a.price_charged||0).toFixed(2);
+    document.getElementById("finishCourtesyReason").value="";
+    document.getElementById("finishCourtesyWrap").style.display="none";
+    dialog.showModal();
   }
+
+  document.getElementById("closeFinishAppointmentBtn").addEventListener("click",()=>{
+    document.getElementById("finishAppointmentDialog").close();
+  });
+
+  document.getElementById("finishPaymentMethod").addEventListener("change",()=>{
+    const method=document.getElementById("finishPaymentMethod").value;
+    const courtesy=method==="courtesy";
+    document.getElementById("finishCourtesyWrap").style.display=courtesy?"block":"none";
+    if(courtesy) document.getElementById("finishAmountPaid").value="0.00";
+    else if(finishAppointmentTarget) document.getElementById("finishAmountPaid").value=Number(finishAppointmentTarget.price_charged||0).toFixed(2);
+  });
+
+  document.getElementById("confirmFinishAppointmentBtn").addEventListener("click",async()=>{
+    const a=finishAppointmentTarget;
+    if(!a)return;
+    const payment=document.getElementById("finishPaymentMethod").value;
+    const paid=payment==="courtesy"?0:Number(document.getElementById("finishAmountPaid").value||0);
+    if(!Number.isFinite(paid)||paid<0){alert("Informe um valor válido.");return}
+    const courtesyReason=payment==="courtesy"?(document.getElementById("finishCourtesyReason").value.trim()||null):null;
+    try{
+      await updateAppointmentFields(a.id,{
+        status:"completed",
+        payment_method:payment,
+        amount_paid:paid,
+        courtesy_reason:courtesyReason,
+        completed_at:new Date().toISOString(),
+        next_return_date:addDays(a.appointment_date,15)
+      });
+      document.getElementById("finishAppointmentDialog").close();
+      alert("Atendimento concluído e pagamento registrado.");
+      renderToday(currentProfile?.role==="admin");
+    }catch(e){
+      console.error(e);
+      alert("Não foi possível concluir o atendimento.");
+    }
+  });
+
   function appointmentItem(a,showBarber){
     const barber=barbers.find(b=>Number(b.id)===Number(a.barber_id));
     const div=document.createElement("div"); div.className="list-item";
@@ -1601,7 +1675,7 @@ Gostaria de confirmar meu agendamento.`;
         ${!["confirmed","confirmation_sent","completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light confirm-only">✅ Confirmar</button>`:""}
         ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light confirm-wa">💬 ${a.confirmation_sent_at?"Abrir WhatsApp novamente":"Confirmar e WhatsApp"}</button>`:""}
         ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light start-service">✂️ Iniciar</button>`:""}
-        ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light finish-service">💰 Finalizar</button>`:""}
+        ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-light finish-service">💰 Concluir e pagamento</button>`:""}
         ${a.status!=="cancelled"&&a.status!=="completed"?`<button class="btn-small btn-danger cancel-service">Cancelar e liberar</button><button class="btn-small btn-danger no-show">Não compareceu</button>`:""}
         ${currentProfile?.pix_enabled&&currentProfile?.pix_key?`<button class="btn-small btn-light send-pix">🔑 Enviar Pix</button>`:""}
       </div>`;
@@ -1616,27 +1690,66 @@ Gostaria de confirmar meu agendamento.`;
   }
 
   async function renderToday(adminMode=false){
-    panelContent.className="panel-content active"; panelContent.innerHTML=`<div class="loading">Carregando hoje...</div>`;
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="loading">Carregando painel...</div>`;
     try{
-      const all=await fetchAppointments(), today=new Date().toISOString().slice(0,10);
-      const items=all.filter(a=>a.appointment_date===today && (adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id)));
-      const pending=items.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
+      const all=await fetchAppointments();
+      const today=new Date().toISOString().slice(0,10);
+      const mine=all.filter(a=>adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id));
+
+      const pendingAll=mine
+        .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
+        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+
+      const items=mine.filter(a=>a.appointment_date===today);
       const confirmed=items.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
       const completed=items.filter(a=>a.status==="completed");
-      const next=items.filter(a=>!["completed","cancelled","no_show"].includes(a.status)).sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""))[0];
-      panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Hoje — ${formatDateWithWeekday(today)}</h2><p class="muted">Resumo rápido do dia.</p></div></div>
-      <div class="stats-grid"><div class="stat"><small>Aguardando confirmação</small><strong>${pending.length}</strong></div><div class="stat"><small>Confirmados</small><strong>${confirmed.length}</strong></div><div class="stat"><small>Realizados</small><strong>${completed.length}</strong></div><div class="stat"><small>Próximo</small><strong style="font-size:18px">${next?(next.start_time||"").slice(0,5)+" • "+escapeHtml(next.client_name):"—"}</strong></div></div>
-      <div class="quick-actions">${pending.length?`<button id="confirmAllToday" class="btn btn-dark">✅ Confirmar todos de hoje (${pending.length})</button>`:""}<button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button></div>
-      <div id="todayList" class="list"></div>`;
-      const list=document.getElementById("todayList"); items.sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||"")).forEach(a=>list.appendChild(appointmentItem(a,adminMode))); if(!items.length)list.innerHTML=`<div class="empty">Nenhum atendimento hoje.</div>`;
+      const next=items
+        .filter(a=>!["completed","cancelled","no_show"].includes(a.status))
+        .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""))[0];
+
+      panelContent.innerHTML=`
+        <div class="panel-content-head">
+          <div>
+            <h2>Visão rápida</h2>
+            <p class="muted">Confirme novos agendamentos e acompanhe os atendimentos de hoje.</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat"><small>Aguardando confirmação</small><strong>${pendingAll.length}</strong></div>
+          <div class="stat"><small>Confirmados hoje</small><strong>${confirmed.length}</strong></div>
+          <div class="stat"><small>Realizados hoje</small><strong>${completed.length}</strong></div>
+          <div class="stat"><small>Próximo hoje</small><strong style="font-size:18px">${next?(next.start_time||"").slice(0,5)+" • "+escapeHtml(next.client_name):"—"}</strong></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>🔔 Clientes aguardando confirmação</h3>
+          <p class="muted">Aqui aparecem também os próximos dias, não somente hoje.</p>
+          <div id="pendingConfirmList" class="list"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="panel-content-head" style="margin-bottom:8px">
+            <div><h3>📅 Atendimentos de hoje — ${formatDateWithWeekday(today)}</h3></div>
+            <button id="openFullAgenda" class="btn btn-light">Ver agenda completa</button>
+          </div>
+          <div id="todayList" class="list"></div>
+        </div>`;
+
+      const pendingList=document.getElementById("pendingConfirmList");
+      pendingAll.forEach(a=>pendingList.appendChild(appointmentItem(a,adminMode)));
+      if(!pendingAll.length) pendingList.innerHTML=`<div class="empty">Nenhum cliente aguardando confirmação.</div>`;
+
+      const todayList=document.getElementById("todayList");
+      items.sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||"")).forEach(a=>todayList.appendChild(appointmentItem(a,adminMode)));
+      if(!items.length) todayList.innerHTML=`<div class="empty">Nenhum atendimento hoje.</div>`;
+
       document.getElementById("openFullAgenda")?.addEventListener("click",()=>renderAgenda(adminMode));
-      document.getElementById("confirmAllToday")?.addEventListener("click",async()=>{
-        if(!confirm(`Confirmar ${pending.length} horário(s) de hoje?`))return;
-        for(const a of pending){ try{await updateAppointmentFields(a.id,{status:"confirmed",confirmed_at:new Date().toISOString()});a.status="confirmed"}catch(e){} }
-        panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Confirmados ✅</h2><p class="muted">Agora clique no WhatsApp de cada cliente. A mensagem já abre pronta.</p></div></div><div id="massWhatsapp" class="list"></div>`;
-        const out=document.getElementById("massWhatsapp"); pending.forEach(a=>{const d=document.createElement("div");d.className="list-item";d.innerHTML=`<strong>${escapeHtml(a.client_name)}</strong><div>${formatDateTime(a.appointment_date,a.start_time)}</div><button class="btn btn-dark wa">💬 Abrir WhatsApp</button>`;d.querySelector(".wa").onclick=()=>openClientWhatsapp(a,"confirmation");out.appendChild(d)});
-      });
-    }catch(e){console.error(e);panelContent.innerHTML=`<div class="empty">Não foi possível carregar o resumo de hoje.</div>`}
+    }catch(e){
+      console.error(e);
+      panelContent.innerHTML=`<div class="empty">Não foi possível carregar o painel.</div>`;
+    }
   }
 
   async function renderAgenda(adminMode){
