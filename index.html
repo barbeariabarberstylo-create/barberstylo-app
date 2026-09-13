@@ -369,7 +369,7 @@
   const money = value => Number(value || 0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
   const normalizePhone = value => String(value || "").replace(/\D/g,"").replace(/^55(?=\d{10,11}$)/,"");
-  const authPhone = value => `+55${normalizePhone(value)}`;
+  const authEmail = value => `${normalizePhone(value)}@login.barberstylo.com.br`;
   const phoneForWhatsapp = value => `55${normalizePhone(value)}`;
   const hasFullName = value => String(value || "").trim().split(/\s+/).filter(Boolean).length >= 2;
   function formatDate(value){
@@ -1817,7 +1817,7 @@ Gostaria de confirmar meu agendamento.`;
     const phone=normalizePhone(document.getElementById("loginPhone").value),password=document.getElementById("loginPassword").value;
     if(phone.length<10||!password){loginMessage.style.color="#b00020";loginMessage.textContent="Preencha o telefone e a senha.";return}
     loginSubmit.disabled=true;loginSubmit.textContent="Entrando...";
-    const {error}=await supabase.auth.signInWithPassword({phone:authPhone(phone),password});
+    const {error}=await supabase.auth.signInWithPassword({email:authEmail(phone),password});
     if(error){loginMessage.style.color="#b00020";loginMessage.textContent="Telefone ou senha incorretos.";loginSubmit.disabled=false;loginSubmit.textContent="Entrar";return}
     try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember",document.getElementById("rememberLogin").checked?"1":"0");openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
     catch(error){console.error(error);loginMessage.style.color="#b00020";loginMessage.textContent="Usuário autenticado, mas sem perfil de acesso."}
@@ -1831,7 +1831,7 @@ Gostaria de confirmar meu agendamento.`;
   document.getElementById("saveChangePasswordBtn").addEventListener("click",async()=>{
     const current=document.getElementById("currentPassword").value,n1=document.getElementById("newPassword").value,n2=document.getElementById("confirmNewPassword").value,msg=document.getElementById("changePasswordMessage");
     if(n1.length<6||n1!==n2){msg.style.color="#b00020";msg.textContent=n1!==n2?"As novas senhas não coincidem.":"A nova senha precisa ter pelo menos 6 caracteres.";return}
-    try{const phone=authPhone(currentProfile?.phone||"");if(current){const {error:re}=await supabase.auth.signInWithPassword({phone,password:current});if(re)throw new Error("Senha atual incorreta.")}const {error}=await supabase.auth.updateUser({password:n1});if(error)throw error;try{await supabase.rpc("mark_password_changed")}catch(e){};currentProfile.force_password_change=false;msg.style.color="#16803c";msg.textContent="Senha alterada com sucesso!";setTimeout(()=>document.getElementById("changePasswordDialog").close(),800)}catch(e){msg.style.color="#b00020";msg.textContent=e.message||"Não foi possível alterar a senha."}
+    try{const email=authEmail(currentProfile?.phone||"");if(current){const {error:re}=await supabase.auth.signInWithPassword({email,password:current});if(re)throw new Error("Senha atual incorreta.")}const {error}=await supabase.auth.updateUser({password:n1});if(error)throw error;try{await supabase.rpc("mark_password_changed")}catch(e){};currentProfile.force_password_change=false;msg.style.color="#16803c";msg.textContent="Senha alterada com sucesso!";setTimeout(()=>document.getElementById("changePasswordDialog").close(),800)}catch(e){msg.style.color="#b00020";msg.textContent=e.message||"Não foi possível alterar a senha."}
   });
 
   document.getElementById("logoutBtn").addEventListener("click",async() => {
