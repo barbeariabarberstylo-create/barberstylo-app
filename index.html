@@ -1254,8 +1254,12 @@ Gostaria de confirmar meu agendamento.`;
         .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
         .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
 
+      const confirmedFuture=mine
+        .filter(a=>a.appointment_date>=today && ["confirmed","confirmation_sent","in_service"].includes(a.status))
+        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+
       const items=mine.filter(a=>a.appointment_date===today);
-      const confirmed=items.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
+      const confirmedToday=items.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
       const completed=items.filter(a=>a.status==="completed");
       const next=items
         .filter(a=>!["completed","cancelled","no_show"].includes(a.status))
@@ -1265,13 +1269,13 @@ Gostaria de confirmar meu agendamento.`;
         <div class="panel-content-head">
           <div>
             <h2>Visão rápida</h2>
-            <p class="muted">Confirme novos agendamentos e acompanhe os atendimentos de hoje.</p>
+            <p class="muted">Confirme novos agendamentos, acompanhe os confirmados e finalize o pagamento.</p>
           </div>
         </div>
 
         <div class="stats-grid">
           <div class="stat"><small>Aguardando confirmação</small><strong>${pendingAll.length}</strong></div>
-          <div class="stat"><small>Confirmados hoje</small><strong>${confirmed.length}</strong></div>
+          <div class="stat"><small>Confirmados próximos</small><strong>${confirmedFuture.length}</strong></div>
           <div class="stat"><small>Realizados hoje</small><strong>${completed.length}</strong></div>
           <div class="stat"><small>Próximo hoje</small><strong style="font-size:18px">${next?(next.start_time||"").slice(0,5)+" • "+escapeHtml(next.client_name):"—"}</strong></div>
         </div>
@@ -1280,6 +1284,12 @@ Gostaria de confirmar meu agendamento.`;
           <h3>🔔 Clientes aguardando confirmação</h3>
           <p class="muted">Aqui aparecem também os próximos dias, não somente hoje.</p>
           <div id="pendingConfirmList" class="list"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>✅ Próximos agendamentos confirmados</h3>
+          <p class="muted">Depois de confirmar no WhatsApp, o cliente continua aqui até o atendimento ser concluído.</p>
+          <div id="confirmedFutureList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
@@ -1294,6 +1304,10 @@ Gostaria de confirmar meu agendamento.`;
       pendingAll.forEach(a=>pendingList.appendChild(appointmentItem(a,adminMode)));
       if(!pendingAll.length) pendingList.innerHTML=`<div class="empty">Nenhum cliente aguardando confirmação.</div>`;
 
+      const confirmedList=document.getElementById("confirmedFutureList");
+      confirmedFuture.forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
+      if(!confirmedFuture.length) confirmedList.innerHTML=`<div class="empty">Nenhum agendamento confirmado próximo.</div>`;
+
       const todayList=document.getElementById("todayList");
       items.sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||"")).forEach(a=>todayList.appendChild(appointmentItem(a,adminMode)));
       if(!items.length) todayList.innerHTML=`<div class="empty">Nenhum atendimento hoje.</div>`;
@@ -1304,7 +1318,6 @@ Gostaria de confirmar meu agendamento.`;
       panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o painel.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
     }
   }
-
   async function renderAgenda(adminMode){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${adminMode?"Agenda geral":"Minha agenda"}</h2><p class="muted">Filtre por data e status.</p></div></div>
