@@ -172,8 +172,9 @@
   </section>
 
   <section class="info-grid">
-    <div class="card"><h3>📍 Onde estamos</h3><p>Av. Cuiabá, 1193<br>Jd. Esperança</p></div>
+    <div class="card"><h3>📍 Onde estamos</h3><p>Av. Cuiabá, 1193<br>Jd. Esperança<br><strong>Sarandi, Paraná</strong></p></div>
     <div class="card"><h3>🕘 Atendimento</h3><p>Segunda a sábado<br>9h às 20h</p><p><strong>Domingo:</strong> sob disponibilidade.</p></div>
+    <div class="card"><h3>📸 Instagram</h3><p>Acompanhe nossos cortes e trabalhos.</p><p><a href="https://www.instagram.com/barberstylo/" target="_blank" rel="noopener"><strong>@barberstylo</strong></a></p></div>
   </section>
 
   <section id="agendamento">
@@ -237,7 +238,7 @@
   </section>
 </main>
 
-<footer>© BarberStylo • Av. Cuiabá, 1193 - Jd. Esperança</footer>
+<footer>© BarberStylo • Av. Cuiabá, 1193 - Jd. Esperança • Sarandi, Paraná • Instagram: @barberstylo</footer>
 
 <nav class="bottom-nav">
   <button onclick="document.getElementById('inicio').scrollIntoView({behavior:'smooth'})"><span>⌂</span><small>Início</small></button>
@@ -2065,9 +2066,132 @@ Gostaria de confirmar meu agendamento.`;
 
   async function renderAvailability(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${adminMode?"Horários e folgas":"Meus horários"}</h2><p class="muted">Configure expediente e registre o motivo quando não for atender.</p></div></div><div class="list-item"><div class="form-grid">${adminMode?`<div><label>Barbeiro</label><select id="availBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<div><label>Data</label><input id="availDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Situação</label><select id="availType"><option value="work">Vou atender</option><option value="day_off">Folga / não vou atender</option><option value="block">Bloquear parte do dia</option><option value="extra">Horário extra</option></select></div><div><label>Início</label><input id="availStart" type="time" value="09:00"></div><div><label>Fim</label><input id="availEnd" type="time" value="20:00"></div><div><label>Motivo</label><select id="availReason"><option value="">—</option><option>Médico / consulta</option><option>Folga</option><option>Compromisso pessoal</option><option>Almoço / intervalo</option><option>Curso / treinamento</option><option>Férias</option><option>Doença</option><option>Manutenção da barbearia</option><option>Horário particular</option><option>Outro</option></select></div><div class="full"><label>Observação</label><input id="availNote" placeholder="Opcional"></div></div><button id="saveAvailability" class="btn btn-dark">Salvar disponibilidade</button></div><div id="availabilityList" class="list" style="margin-top:14px"></div>`;
-    document.getElementById("saveAvailability").onclick=async()=>{const payload={barber_id:adminMode?Number(document.getElementById("availBarber").value):Number(currentProfile.barber_id),schedule_date:document.getElementById("availDate").value,availability_type:document.getElementById("availType").value,start_time:document.getElementById("availStart").value,end_time:document.getElementById("availEnd").value,reason:document.getElementById("availReason").value||null,notes:document.getElementById("availNote").value.trim()||null};try{const {error}=await supabase.from("barber_availability").insert(payload);if(error)throw error;alert("Disponibilidade salva.");renderAvailability(adminMode)}catch(e){alert("A tela está pronta. Vamos criar a tabela de disponibilidade no SQL final.")}};
-    try{let q=supabase.from("barber_availability").select("*").gte("schedule_date",new Date().toISOString().slice(0,10)).order("schedule_date");if(!adminMode)q=q.eq("barber_id",currentProfile.barber_id);const {data,error}=await q;if(error)throw error;document.getElementById("availabilityList").innerHTML=(data||[]).map(x=>`<div class="list-item"><strong>${formatDateWithWeekday(x.schedule_date)}</strong><div>${escapeHtml(x.availability_type)} • ${(x.start_time||"").slice(0,5)}–${(x.end_time||"").slice(0,5)}</div><div class="muted">Motivo: ${escapeHtml(x.reason||"—")} ${x.notes?`• ${escapeHtml(x.notes)}`:""}</div></div>`).join("")||`<div class="empty">Nenhuma configuração futura.</div>`;}catch(e){document.getElementById("availabilityList").innerHTML=`<div class="empty">O histórico de disponibilidade será ativado no SQL final.</div>`}
+    panelContent.innerHTML=`<div class="loading">Carregando horários...</div>`;
+
+    let selectedDate=new Date().toISOString().slice(0,10);
+    let selectedAdminBarber=adminMode?Number(barbers[0]?.id||0):Number(currentProfile.barber_id);
+
+    async function load(){
+      try{
+        const barberId=adminMode?selectedAdminBarber:Number(currentProfile.barber_id);
+        const {data,error}=await supabase.rpc("get_barber_day_schedule",{
+          p_barber_id:barberId,
+          p_date:selectedDate
+        });
+        if(error)throw error;
+
+        const day=data?.[0]||{};
+        const slots=Array.isArray(day.slots)?day.slots:[];
+
+        panelContent.innerHTML=`
+          <div class="panel-content-head">
+            <div>
+              <h2>🕒 Disponibilidade</h2>
+              <p class="muted">Organize cada dia e veja rapidamente o que está livre, bloqueado ou ocupado.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="form-grid">
+              ${adminMode?`<div><label>Barbeiro</label><select id="availabilityBarberSelect">${barbers.map(b=>`<option value="${b.id}" ${Number(b.id)===barberId?"selected":""}>${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}
+              <div><label>Data</label><input id="availabilityDate" type="date" value="${selectedDate}"></div>
+              <div>
+                <label>Como será o dia?</label>
+                <select id="availabilityDayMode">
+                  <option value="work" ${day.day_mode==="work"?"selected":""}>✅ Atendo normalmente</option>
+                  <option value="partial" ${day.day_mode==="partial"?"selected":""}>🕒 Horário reduzido</option>
+                  <option value="extra" ${day.day_mode==="extra"?"selected":""}>➕ Horário extra</option>
+                  <option value="off" ${day.day_mode==="off"?"selected":""}>🚫 Não vou atender</option>
+                </select>
+              </div>
+              <div><label>Começo</label><input id="availabilityStart" type="time" value="${String(day.start_time||"09:00").slice(0,5)}"></div>
+              <div><label>Fim</label><input id="availabilityEnd" type="time" value="${String(day.end_time||"20:00").slice(0,5)}"></div>
+              <div>
+                <label>Motivo</label>
+                <select id="availabilityReason">
+                  <option value="">Sem motivo</option>
+                  <option value="day_off" ${day.reason==="day_off"?"selected":""}>Folga</option>
+                  <option value="doctor" ${day.reason==="doctor"?"selected":""}>Médico</option>
+                  <option value="personal" ${day.reason==="personal"?"selected":""}>Compromisso pessoal</option>
+                  <option value="lunch" ${day.reason==="lunch"?"selected":""}>Almoço</option>
+                  <option value="training" ${day.reason==="training"?"selected":""}>Treinamento</option>
+                  <option value="vacation" ${day.reason==="vacation"?"selected":""}>Férias</option>
+                  <option value="illness" ${day.reason==="illness"?"selected":""}>Doença</option>
+                  <option value="maintenance" ${day.reason==="maintenance"?"selected":""}>Manutenção</option>
+                  <option value="private" ${day.reason==="private"?"selected":""}>Horário particular</option>
+                  <option value="other" ${day.reason==="other"?"selected":""}>Outro</option>
+                </select>
+              </div>
+              <div class="full"><label>Observação</label><input id="availabilityNotes" value="${escapeHtml(day.notes||"")}" placeholder="Ex.: compromisso às 17h, abrir mais cedo..."></div>
+            </div>
+            <button id="saveDayAvailability" class="btn btn-dark">💾 Salvar o dia</button>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <h3>📅 Horários de ${formatDateWithWeekday(selectedDate)}</h3>
+            <p class="muted">Clique em um horário disponível para bloquear. Clique em um bloqueado para liberar. Ocupados não podem ser alterados.</p>
+            <div id="availabilitySlots" class="slots"></div>
+            <div class="note" style="margin-top:12px"><strong>Legenda:</strong> ✅ disponível • 🚫 bloqueado • 👤 ocupado</div>
+          </div>`;
+
+        const wrap=document.getElementById("availabilitySlots");
+        if(!slots.length){
+          wrap.innerHTML=`<div class="empty">Este dia está fechado ou sem horários configurados.</div>`;
+        }else{
+          slots.forEach(s=>{
+            const btn=document.createElement("button");
+            btn.type="button";
+            btn.className="slot";
+            btn.disabled=s.status==="occupied";
+            btn.style.background=s.status==="available"?"#fff":s.status==="blocked"?"#fff3f3":"#eee";
+            btn.style.borderColor=s.status==="blocked"?"#efc8c8":"#ccc";
+            btn.style.opacity=s.status==="occupied"?"0.65":"1";
+            btn.textContent=`${s.status==="available"?"✅":s.status==="blocked"?"🚫":"👤"} ${String(s.time).slice(0,5)} ${s.status==="available"?"Disponível":s.status==="blocked"?"Bloqueado":"Ocupado"}`;
+            if(s.status!=="occupied"){
+              btn.onclick=async()=>{
+                const {error}=await supabase.rpc("set_barber_slot_status",{
+                  p_barber_id:barberId,
+                  p_date:selectedDate,
+                  p_time:s.time,
+                  p_status:s.status==="available"?"blocked":"available"
+                });
+                if(error){alert(error.message||"Não foi possível alterar o horário.");return}
+                load();
+              };
+            }
+            wrap.appendChild(btn);
+          });
+        }
+
+        document.getElementById("availabilityDate").onchange=e=>{selectedDate=e.target.value;load()};
+        document.getElementById("availabilityBarberSelect")?.addEventListener("change",e=>{selectedAdminBarber=Number(e.target.value);load()});
+
+        document.getElementById("saveDayAvailability").onclick=async()=>{
+          const mode=document.getElementById("availabilityDayMode").value;
+          const start=document.getElementById("availabilityStart").value||"09:00";
+          const end=document.getElementById("availabilityEnd").value||"20:00";
+          if(mode!=="off" && start>=end){alert("O horário final precisa ser depois do horário inicial.");return}
+
+          const {error}=await supabase.rpc("save_barber_day_availability",{
+            p_barber_id:barberId,
+            p_date:selectedDate,
+            p_day_mode:mode,
+            p_start_time:start,
+            p_end_time:end,
+            p_reason:document.getElementById("availabilityReason").value||null,
+            p_notes:document.getElementById("availabilityNotes").value.trim()||null
+          });
+          if(error){alert(error.message||"Não foi possível salvar.");return}
+          alert("Disponibilidade atualizada.");
+          load();
+        };
+      }catch(e){
+        console.error(e);
+        panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar os horários.</strong><br>${escapeHtml(e?.message||"")}</div>`;
+      }
+    }
+
+    await load();
   }
 
   async function renderProfileFinal(){
