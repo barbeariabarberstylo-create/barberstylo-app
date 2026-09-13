@@ -1933,7 +1933,128 @@ Te esperamos!
                 </div>
                 <span class="pill ${statusClass(a.status)}">${escapeHtml(statusText(a.status))}</span>
               </div>
+
+              <div class="action-row" style="margin-top:10px">
+                ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light day-move">🕒 Mudar horário</button>`:""}
+                ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light day-swap">👤 Trocar cliente</button>`:""}
+                ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-danger day-release">🔓 Liberar horário</button>`:""}
+                <button class="btn-small btn-danger day-delete-appt">🗑️ Excluir agendamento</button>
+                ${adminMode && a.client_id?`<button class="btn-small btn-danger day-clear-client">🧹 Limpar histórico do cliente</button>`:""}
+              </div>
+
+              <div class="day-edit-box" style="display:none;margin-top:12px;padding:12px;border:1px solid #ddd;border-radius:12px;background:#fafafa">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+                  <label>
+                    <strong>Nova data</strong>
+                    <input type="date" class="day-move-date" value="${escapeHtml(a.appointment_date||selectedDate)}" style="width:100%;margin-top:5px">
+                  </label>
+                  <label>
+                    <strong>Novo horário</strong>
+                    <input type="time" class="day-move-time" value="${escapeHtml((a.start_time||"").slice(0,5))}" step="1800" style="width:100%;margin-top:5px">
+                  </label>
+                </div>
+                <div class="action-row" style="margin-top:10px">
+                  <button class="btn-small btn-dark day-save-move">Salvar novo horário</button>
+                  <button class="btn-small btn-light day-cancel-move">Cancelar</button>
+                </div>
+              </div>
             `;
+
+            row.querySelector(".day-move")?.addEventListener("click",()=>{
+              const box=row.querySelector(".day-edit-box");
+              box.style.display=box.style.display==="none"?"block":"none";
+            });
+
+            row.querySelector(".day-cancel-move")?.addEventListener("click",()=>{
+              row.querySelector(".day-edit-box").style.display="none";
+            });
+
+            row.querySelector(".day-save-move")?.addEventListener("click",async()=>{
+              const newDate=row.querySelector(".day-move-date").value;
+              const newTime=row.querySelector(".day-move-time").value;
+              if(!newDate||!newTime){alert("Escolha a nova data e o novo horário.");return;}
+              try{
+                const {error}=await supabase.rpc("reschedule_appointment",{
+                  p_appointment_id:Number(a.id),
+                  p_new_date:newDate,
+                  p_new_time:newTime
+                });
+                if(error)throw error;
+                alert("Cliente remanejado para o novo horário.");
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível mudar o horário.");
+              }
+            });
+
+            row.querySelector(".day-swap")?.addEventListener("click",async()=>{
+              const phone=prompt("Digite o WhatsApp do cliente que vai ficar neste horário:");
+              if(phone===null)return;
+              const clean=String(phone).replace(/\D/g,"");
+              if(clean.length<10){alert("Digite um WhatsApp válido com DDD.");return;}
+              try{
+                const {data,error}=await supabase.rpc("replace_appointment_client_by_phone",{
+                  p_appointment_id:Number(a.id),
+                  p_client_phone:clean
+                });
+                if(error)throw error;
+                alert(`Cliente trocado para ${data||"o cadastro informado"}.`);
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível trocar o cliente.");
+              }
+            });
+
+            row.querySelector(".day-release")?.addEventListener("click",async()=>{
+              if(!confirm(`Liberar o horário ${(a.start_time||"").slice(0,5)} de ${a.client_name||"cliente"}?\n\nO agendamento ficará como cancelado e o horário voltará a ficar livre.`))return;
+              try{
+                const {error}=await supabase.rpc("set_appointment_action",{
+                  p_appointment_id:Number(a.id),
+                  p_action:"cancel"
+                });
+                if(error)throw error;
+                alert("Horário liberado.");
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível liberar o horário.");
+              }
+            });
+
+            row.querySelector(".day-delete-appt")?.addEventListener("click",async()=>{
+              if(!confirm(`Excluir definitivamente este agendamento de ${a.client_name||"cliente"}?\n\nIsso remove somente este agendamento. O cadastro do cliente continua existindo.`))return;
+              try{
+                const {error}=await supabase.rpc("delete_appointment_managed",{
+                  p_appointment_id:Number(a.id)
+                });
+                if(error)throw error;
+                alert("Agendamento excluído.");
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível excluir o agendamento.");
+              }
+            });
+
+            row.querySelector(".day-clear-client")?.addEventListener("click",async()=>{
+              if(!confirm(`Limpar TODO o histórico de ${a.client_name||"cliente"}?\n\nO cadastro, nome e telefone permanecem, mas os agendamentos e atendimentos de teste serão apagados.`))return;
+              const txt=prompt("Digite LIMPAR para confirmar:");
+              if(txt!=="LIMPAR")return;
+              try{
+                const {error}=await supabase.rpc("clear_client_history",{
+                  p_client_id:Number(a.client_id)
+                });
+                if(error)throw error;
+                alert("Histórico do cliente limpo. O cadastro foi mantido.");
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível limpar o histórico do cliente.");
+              }
+            });
+
             clientsList.appendChild(row);
           });
         }
