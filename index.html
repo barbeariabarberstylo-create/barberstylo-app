@@ -295,6 +295,52 @@
 
 
 
+
+<dialog id="financeClientDialog">
+  <div class="login-box" style="width:min(560px,94vw)">
+    <div class="login-head">
+      <div>
+        <div style="font-size:13px;color:#777;font-weight:700">CLIENTE</div>
+        <h2 style="margin:4px 0 0">👤 Cadastro do cliente</h2>
+      </div>
+      <button id="closeFinanceClientBtn" class="close-round" type="button">×</button>
+    </div>
+    <div id="financeClientContent"></div>
+  </div>
+</dialog>
+
+<dialog id="editFinanceDialog">
+  <div class="login-box" style="width:min(520px,94vw)">
+    <div class="login-head">
+      <div>
+        <div style="font-size:13px;color:#777;font-weight:700">FINANCEIRO</div>
+        <h2 style="margin:4px 0 0">✏️ Alterar pagamento</h2>
+      </div>
+      <button id="closeEditFinanceBtn" class="close-round" type="button">×</button>
+    </div>
+    <div id="editFinanceSummary" class="note" style="margin-bottom:14px"></div>
+    <div class="form-grid">
+      <div>
+        <label>Forma de pagamento</label>
+        <select id="editFinancePayment">
+          <option value="pix">Pix</option>
+          <option value="cash">Dinheiro</option>
+          <option value="debit">Débito</option>
+          <option value="credit">Crédito</option>
+          <option value="package">Pacote</option>
+          <option value="courtesy">Cortesia</option>
+          <option value="pending">Pendente</option>
+        </select>
+      </div>
+      <div>
+        <label>Valor</label>
+        <input id="editFinanceAmount" type="number" min="0" step="0.01">
+      </div>
+    </div>
+    <button id="saveFinanceEditBtn" class="btn btn-dark" type="button">💾 Salvar alteração</button>
+  </div>
+</dialog>
+
 <dialog id="finishAppointmentDialog">
   <div class="login-box" style="width:min(560px,94vw)">
     <div class="login-head">
@@ -1046,52 +1092,218 @@ Gostaria de confirmar meu agendamento.`;
     }
   }
 
+  let financeRowsCache=[];
+  let financeEditTarget=null;
+  let financePeriodFilter="all";
+
+  function dateOnlyLocal(value){
+    if(!value)return null;
+    const [y,m,d]=String(value).slice(0,10).split("-").map(Number);
+    return new Date(y,m-1,d,12,0,0);
+  }
+
+  function financePeriodRows(rows,days){
+    if(!days)return rows;
+    const today=new Date();
+    today.setHours(12,0,0,0);
+    const from=new Date(today);
+    from.setDate(from.getDate()-(days-1));
+    return rows.filter(r=>{
+      const d=dateOnlyLocal(r.appointment_date);
+      return d && d>=from && d<=today;
+    });
+  }
+
+  function financeMetrics(rows){
+    const paid=rows.filter(r=>r.entry_status==="paid");
+    const pending=rows.filter(r=>r.entry_status==="pending");
+    const courtesy=rows.filter(r=>r.entry_status==="courtesy");
+    return {
+      totalPaid:paid.reduce((s,r)=>s+Number(r.amount||0),0),
+      paidCount:paid.length,
+      pendingCount:pending.length,
+      courtesyCount:courtesy.length,
+      totalRecords:rows.length
+    };
+  }
+
+  function financePeriodLabel(key){
+    return ({d15:"Últimos 15 dias",d30:"Últimos 30 dias",y1:"Último ano",all:"Todo o período"})[key]||"Todo o período";
+  }
+
+  function financePeriodDays(key){
+    return ({d15:15,d30:30,y1:365,all:null})[key]??null;
+  }
+
+  function openFinanceClient(r){
+    const dialog=document.getElementById("financeClientDialog");
+    document.getElementById("financeClientContent").innerHTML=`
+      <div class="stats-grid" style="margin-bottom:14px">
+        <div class="stat"><small>Total gasto</small><strong>${money(r.client_total_spent||0)}</strong></div>
+        <div class="stat"><small>Atendimentos concluídos</small><strong>${Number(r.client_completed_count||0)}</strong></div>
+        <div class="stat"><small>Última visita</small><strong style="font-size:16px">${r.client_last_visit?escapeHtml(formatDate(r.client_last_visit)):"—"}</strong></div>
+        <div class="stat"><small>WhatsApp</small><strong style="font-size:16px">${escapeHtml(r.client_phone||"—")}</strong></div>
+      </div>
+      <div class="list-item">
+        <strong style="font-size:20px">${escapeHtml(r.client_name||"Cliente")}</strong>
+        <div style="margin-top:10px"><strong>📱 WhatsApp:</strong> ${escapeHtml(r.client_phone||"—")}</div>
+        <div><strong>Faixa:</strong> ${escapeHtml(tagLabel(r.client_tag_color)||"Sem faixa")}</div>
+        <div><strong>Motivo da faixa:</strong> ${escapeHtml(r.client_tag_reason||"Não informado")}</div>
+        <div><strong>Observações:</strong> ${escapeHtml(r.client_notes||"—")}</div>
+      </div>
+      ${r.client_phone?`<button id="financeClientWhatsapp" class="btn btn-dark" type="button">💬 Abrir WhatsApp</button>`:""}`;
+    document.getElementById("financeClientWhatsapp")?.addEventListener("click",()=>{
+      const phone=phoneForWhatsapp(r.client_phone);
+      window.open(`https://wa.me/${phone}`,"_blank");
+    });
+    dialog.showModal();
+  }
+
+  function openFinanceEdit(r){
+    financeEditTarget=r;
+    document.getElementById("editFinanceSummary").innerHTML=
+      `<strong>${escapeHtml(r.client_name||"Cliente")}</strong><br>${escapeHtml(r.service_name||"Serviço")} • ${escapeHtml(formatDate(r.appointment_date))}`;
+    document.getElementById("editFinancePayment").value=r.payment_method||"pending";
+    document.getElementById("editFinanceAmount").value=Number(r.amount||0).toFixed(2);
+    document.getElementById("editFinanceDialog").showModal();
+  }
+
+  document.getElementById("closeFinanceClientBtn").addEventListener("click",()=>document.getElementById("financeClientDialog").close());
+  document.getElementById("closeEditFinanceBtn").addEventListener("click",()=>document.getElementById("editFinanceDialog").close());
+
+  document.getElementById("editFinancePayment").addEventListener("change",()=>{
+    const method=document.getElementById("editFinancePayment").value;
+    if(method==="courtesy"||method==="pending") document.getElementById("editFinanceAmount").value="0.00";
+  });
+
+  document.getElementById("saveFinanceEditBtn").addEventListener("click",async()=>{
+    if(!financeEditTarget)return;
+    const method=document.getElementById("editFinancePayment").value;
+    const amount=Number(document.getElementById("editFinanceAmount").value||0);
+    if(!Number.isFinite(amount)||amount<0){alert("Informe um valor válido.");return}
+    try{
+      const {error}=await supabase.rpc("update_financial_payment",{
+        p_financial_id:Number(financeEditTarget.id),
+        p_payment_method:method,
+        p_amount:amount
+      });
+      if(error)throw error;
+      document.getElementById("editFinanceDialog").close();
+      alert("Pagamento atualizado.");
+      renderEarnings(currentProfile?.role==="admin");
+    }catch(e){
+      console.error(e);
+      alert(e.message||"Não foi possível alterar o pagamento.");
+    }
+  });
+
   async function renderEarnings(adminMode=false){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="loading">Carregando financeiro...</div>`;
     try{
       const {data,error}=await supabase.rpc("list_financial_entries");
       if(error) throw error;
-      const rows=data||[];
-      const paid=rows.filter(r=>r.entry_status==="paid");
-      const pending=rows.filter(r=>r.entry_status==="pending");
-      const courtesy=rows.filter(r=>r.entry_status==="courtesy");
-      const totalPaid=paid.reduce((s,r)=>s+Number(r.amount||0),0);
+      financeRowsCache=data||[];
 
       panelContent.innerHTML=`
         <div class="panel-content-head">
           <div>
             <h2>${adminMode?"Financeiro":"Meus resultados"}</h2>
-            <p class="muted">Todo atendimento concluído entra automaticamente aqui.</p>
+            <p class="muted">Use os filtros abaixo para ver quanto vendeu no período. Clique no cliente para ver quanto ele já gastou e quantas vezes foi atendido.</p>
           </div>
         </div>
-        <div class="stats-grid">
-          <div class="stat"><small>Recebido</small><strong>${money(totalPaid)}</strong></div>
-          <div class="stat"><small>Pagos</small><strong>${paid.length}</strong></div>
-          <div class="stat"><small>Pendentes</small><strong>${pending.length}</strong></div>
-          <div class="stat"><small>Cortesias</small><strong>${courtesy.length}</strong></div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h3>🔎 Funil de vendas</h3>
+          <div class="quick-actions" style="flex-wrap:wrap">
+            <button class="btn btn-light finance-period" data-period="d15">15 dias</button>
+            <button class="btn btn-light finance-period" data-period="d30">30 dias</button>
+            <button class="btn btn-light finance-period" data-period="y1">1 ano</button>
+            <button class="btn btn-light finance-period" data-period="all">Tudo</button>
+          </div>
+          <div id="financePeriodSummary" style="margin-top:14px"></div>
         </div>
-        <div class="card" style="margin-top:16px;overflow:auto">
+
+        <div class="card" style="overflow:auto">
           <h3>💰 Lançamentos financeiros</h3>
-          <table class="mini-table" style="min-width:850px;width:100%">
+          <div id="financePeriodTitle" class="muted" style="margin-bottom:10px"></div>
+          <table class="mini-table" style="min-width:1050px;width:100%">
             <thead><tr>
               <th>Data</th><th>Cliente</th><th>Barbeiro</th><th>Serviço</th>
-              <th>Pagamento</th><th>Status</th><th>Valor</th>
+              <th>Pagamento</th><th>Status</th><th>Valor</th><th>Ações</th>
             </tr></thead>
             <tbody id="financeRows"></tbody>
           </table>
         </div>`;
 
-      const body=document.getElementById("financeRows");
-      body.innerHTML=rows.map(r=>`<tr>
-        <td>${escapeHtml(formatDate(r.appointment_date))}</td>
-        <td>${escapeHtml(r.client_name||"—")}</td>
-        <td>${escapeHtml(r.barber_name||"—")}</td>
-        <td>${escapeHtml(r.service_name||"—")}</td>
-        <td>${escapeHtml(paymentLabel(r.payment_method))}</td>
-        <td>${r.entry_status==="paid"?"✅ Pago":r.entry_status==="courtesy"?"🎁 Cortesia":"⏳ Pendente"}</td>
-        <td><strong>${money(r.amount||0)}</strong></td>
-      </tr>`).join("")||`<tr><td colspan="7">Nenhum lançamento financeiro ainda.</td></tr>`;
+      function drawFinance(){
+        const rows=financePeriodRows(financeRowsCache,financePeriodDays(financePeriodFilter));
+        const m=financeMetrics(rows);
+
+        document.querySelectorAll(".finance-period").forEach(btn=>{
+          btn.classList.toggle("btn-dark",btn.dataset.period===financePeriodFilter);
+          btn.classList.toggle("btn-light",btn.dataset.period!==financePeriodFilter);
+        });
+
+        document.getElementById("financePeriodSummary").innerHTML=`
+          <div class="stats-grid">
+            <div class="stat"><small>Valor vendido</small><strong>${money(m.totalPaid)}</strong></div>
+            <div class="stat"><small>Pagamentos</small><strong>${m.paidCount}</strong></div>
+            <div class="stat"><small>Pendentes</small><strong>${m.pendingCount}</strong></div>
+            <div class="stat"><small>Cortesias</small><strong>${m.courtesyCount}</strong></div>
+          </div>`;
+
+        document.getElementById("financePeriodTitle").textContent=
+          `${financePeriodLabel(financePeriodFilter)} • ${rows.length} lançamento(s)`;
+
+        const body=document.getElementById("financeRows");
+        body.innerHTML=rows.map(r=>`<tr>
+          <td>${escapeHtml(formatDate(r.appointment_date))}</td>
+          <td><button class="btn-small btn-light finance-client" data-id="${r.id}">👤 ${escapeHtml(r.client_name||"—")}</button></td>
+          <td>${escapeHtml(r.barber_name||"—")}</td>
+          <td>${escapeHtml(r.service_name||"—")}</td>
+          <td>${escapeHtml(paymentLabel(r.payment_method))}</td>
+          <td>${r.entry_status==="paid"?"✅ Pago":r.entry_status==="courtesy"?"🎁 Cortesia":"⏳ Pendente"}</td>
+          <td><strong>${money(r.amount||0)}</strong></td>
+          <td>
+            <div class="action-row">
+              <button class="btn-small btn-light finance-edit" data-id="${r.id}">✏️ Alterar</button>
+              <button class="btn-small btn-danger finance-delete" data-id="${r.id}">🗑️ Excluir pagamento</button>
+            </div>
+          </td>
+        </tr>`).join("")||`<tr><td colspan="8">Nenhum lançamento neste período.</td></tr>`;
+
+        body.querySelectorAll(".finance-client").forEach(btn=>btn.addEventListener("click",()=>{
+          const r=financeRowsCache.find(x=>String(x.id)===String(btn.dataset.id)); if(r)openFinanceClient(r);
+        }));
+
+        body.querySelectorAll(".finance-edit").forEach(btn=>btn.addEventListener("click",()=>{
+          const r=financeRowsCache.find(x=>String(x.id)===String(btn.dataset.id)); if(r)openFinanceEdit(r);
+        }));
+
+        body.querySelectorAll(".finance-delete").forEach(btn=>btn.addEventListener("click",async()=>{
+          const r=financeRowsCache.find(x=>String(x.id)===String(btn.dataset.id)); if(!r)return;
+          if(!confirm(`Excluir o pagamento de ${r.client_name}?\n\nO atendimento continuará salvo. O pagamento voltará para PENDENTE.`))return;
+          try{
+            const {error}=await supabase.rpc("delete_financial_payment",{p_financial_id:Number(r.id)});
+            if(error)throw error;
+            alert("Pagamento excluído. O atendimento foi mantido e ficou como pagamento pendente.");
+            renderEarnings(currentProfile?.role==="admin");
+          }catch(e){
+            console.error(e);
+            alert(e.message||"Não foi possível excluir o pagamento.");
+          }
+        }));
+      }
+
+      document.querySelectorAll(".finance-period").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          financePeriodFilter=btn.dataset.period;
+          drawFinance();
+        });
+      });
+
+      drawFinance();
     }catch(e){
       console.error(e);
       panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o financeiro.</strong><br>${escapeHtml(e?.message||"")}</div>`;
