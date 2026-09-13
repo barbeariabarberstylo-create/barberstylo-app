@@ -1507,7 +1507,7 @@ Gostaria de confirmar meu agendamento.`;
     return map[status]||status||"—";
   }
   function paymentLabel(v){ return ({pix:"Pix",cash:"Dinheiro",debit:"Débito",credit:"Crédito",package:"Pacote",courtesy:"Cortesia",pending:"Pendente",other:"Outro"})[v]||v||"Não informado"; }
-  function tagLabel(v){ return ({green:"Verde",yellow:"Amarela",red:"Vermelha"})[v]||"Sem faixa"; }
+  function tagLabel(v){ return ({green:"Verde",yellow:"Amarela",red:"Vermelha",black:"Preta"})[v]||"Sem faixa"; }
   function serviceNameFromAppointment(a){ return a.service_name || a.service_label || `Serviço #${a.service_id||a.barber_service_id||"—"}`; }
   function isPaidAppointment(a){ return a.status==="completed" && !["courtesy","pending"].includes(a.payment_method) && Number(a.amount_paid??a.price_charged??0)>0; }
 
@@ -2404,29 +2404,32 @@ Te esperamos!
       <div class="panel-content-head">
         <div>
           <h2>👥 Clientes</h2>
-          <p class="muted">Pesquise por nome ou WhatsApp e acompanhe o histórico de cada cliente.</p>
+          <p class="muted">Cadastro, histórico, observações, faltas e consumo em um só lugar.</p>
         </div>
       </div>
 
-      <div class="search-row">
-        <div>
-          <label>Pesquisar cliente</label>
-          <input id="clientSearchFinal" placeholder="Ex.: Jovanna ou 44998077518">
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end">
+          <label>
+            <strong>Buscar cliente</strong>
+            <input id="clientSearchFinal" placeholder="Nome ou WhatsApp" style="width:100%;margin-top:6px">
+          </label>
+          <button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button>
         </div>
-        <button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button>
+
+        <div class="client-tabs" style="margin-top:14px">
+          <button class="active client-filter" data-filter="all">Todos</button>
+          <button class="client-filter" data-filter="waiting">Aguardando</button>
+          <button class="client-filter" data-filter="confirmed">Confirmados</button>
+          <button class="client-filter" data-filter="completed">Atendidos</button>
+          <button class="client-filter" data-filter="no_show">Faltas</button>
+          <button class="client-filter" data-filter="cancelled">Cancelados</button>
+          <button class="client-filter" data-filter="attempted">Tentaram agendar</button>
+        </div>
       </div>
 
-      <div class="client-tabs">
-        <button class="active client-filter" data-filter="all">Todos</button>
-        <button class="client-filter" data-filter="attempted">Tentaram agendar</button>
-        <button class="client-filter" data-filter="waiting">Aguardando confirmação</button>
-        <button class="client-filter" data-filter="confirmed">Confirmados</button>
-        <button class="client-filter" data-filter="completed">Atendidos</button>
-        <button class="client-filter" data-filter="no_show">Não compareceram</button>
-        <button class="client-filter" data-filter="cancelled">Cancelados</button>
-      </div>
-
-      <div id="clientFinalList" style="margin-top:14px"></div>`;
+      <div id="clientQuickStats" class="stats-grid" style="margin-bottom:14px"></div>
+      <div id="clientFinalList"></div>`;
 
     const list=document.getElementById("clientFinalList");
     const input=document.getElementById("clientSearchFinal");
@@ -2456,6 +2459,17 @@ Te esperamos!
             }
           });
 
+        const totalSpent=rows.reduce((sum,c)=>sum+Number(c.total_paid||0),0);
+        const totalCompleted=rows.reduce((sum,c)=>sum+Number(c.completed_count||0),0);
+        const totalNoShow=rows.reduce((sum,c)=>sum+Number(c.no_show_count||0),0);
+
+        document.getElementById("clientQuickStats").innerHTML=`
+          <div class="stat"><small>Clientes exibidos</small><strong>${rows.length}</strong></div>
+          <div class="stat"><small>Atendimentos</small><strong>${totalCompleted}</strong></div>
+          <div class="stat"><small>Faltas</small><strong>${totalNoShow}</strong></div>
+          <div class="stat"><small>Valor consumido</small><strong>${money(totalSpent)}</strong></div>
+        `;
+
         list.innerHTML="";
 
         if(!rows.length){
@@ -2470,67 +2484,125 @@ Te esperamos!
 
           const item=document.createElement("div");
           item.className="client-card";
+          item.style.marginBottom="12px";
           item.innerHTML=`
             <div class="client-card-head">
-              <div>
-                <strong style="font-size:18px"><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||"Cliente")}</strong>
-                <div class="muted">📱 ${escapeHtml(c.phone||"—")}</div>
-                <div style="margin-top:7px">
+              <div style="min-width:0">
+                <strong style="font-size:19px">
+                  <span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||"Cliente")}
+                </strong>
+                <div class="muted" style="margin-top:4px">📱 ${escapeHtml(c.phone||"—")}</div>
+                <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
                   ${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'}
                   <span class="pill">${tagLabel(c.tag_color)}</span>
+                  <span class="pill ${reminder.className}">${escapeHtml(reminder.label)}</span>
                 </div>
               </div>
-              <div class="muted">Último status: <strong>${escapeHtml(statusLabel(c.last_status||"")||"—")}</strong></div>
+              <div style="text-align:right">
+                <div class="muted">Último status</div>
+                <strong>${escapeHtml(statusLabel(c.last_status||"")||"—")}</strong>
+              </div>
             </div>
 
-            <div class="client-metrics">
+            <div class="client-metrics" style="margin-top:12px">
               <div class="client-metric"><small>Agendamentos</small><strong>${Number(c.appointment_count||0)}</strong></div>
               <div class="client-metric"><small>Atendidos</small><strong>${Number(c.completed_count||0)}</strong></div>
               <div class="client-metric"><small>Faltas</small><strong>${Number(c.no_show_count||0)}</strong></div>
-              <div class="client-metric"><small>Cancelados</small><strong>${Number(c.cancelled_count||0)}</strong></div>
               <div class="client-metric"><small>Total gasto</small><strong>${money(c.total_paid||0)}</strong></div>
-              <div class="client-metric"><small>Último agendamento</small><strong>${c.last_appointment_date?escapeHtml(weekDayName(c.last_appointment_date).replace(/^./,m=>m.toUpperCase())):"—"}</strong></div>
             </div>
 
-            <div style="margin:10px 0;padding:10px 12px;border:1px solid #e7e7e7;border-radius:12px;background:#fafafa">
-              <div><strong>⏰ Lembrete do cliente:</strong> <span class="pill ${reminder.className}">${escapeHtml(reminder.label)}</span></div>
-              <div class="muted" style="margin-top:5px">${escapeHtml(reminder.detail)}</div>
-              ${lastCompletedDate?`<div class="muted">Último atendimento concluído: ${escapeHtml(formatDateWithWeekday(lastCompletedDate))}</div>`:""}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px">
+              <div style="padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:12px">
+                <strong>Faixa</strong>
+                <div class="muted">${tagLabel(c.tag_color)}</div>
+                <div class="muted">${escapeHtml(c.tag_reason||"Sem motivo informado")}</div>
+              </div>
+              <div style="padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:12px">
+                <strong>Observação</strong>
+                <div class="muted">${escapeHtml(c.notes||"Nenhuma observação")}</div>
+              </div>
             </div>
-
-            <div class="muted"><strong>Motivo da faixa:</strong> ${escapeHtml(c.tag_reason||"Não informado")}</div>
-            <div class="muted"><strong>Observação:</strong> ${escapeHtml(c.notes||"—")}</div>
 
             <div class="action-row" style="margin-top:12px">
-              <button class="btn-small btn-light edit-client">✏️ Editar</button>
+              <button class="btn-small btn-dark history-client">Abrir cliente</button>
+              <button class="btn-small btn-light edit-client">✏️ Editar cadastro</button>
               <button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button>
-              <button class="btn-small btn-light history-client">🗂️ Histórico completo</button>
               ${c.phone?`<button class="btn-small btn-light whatsapp-client">💬 WhatsApp</button>`:""}
-              ${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}
+              ${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button>`:""}
+            </div>
+
+            <div class="client-inline-edit" style="display:none;margin-top:14px;padding:14px;border:1px solid #ddd;border-radius:14px;background:#fafafa">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+                <label>
+                  <strong>Nome e sobrenome</strong>
+                  <input class="edit-name" value="${escapeHtml(c.full_name||"")}" style="width:100%;margin-top:5px">
+                </label>
+
+                <label>
+                  <strong>Faixa</strong>
+                  <select class="edit-tag" style="width:100%;margin-top:5px">
+                    <option value="" ${!c.tag_color?"selected":""}>Sem faixa</option>
+                    <option value="green" ${c.tag_color==="green"?"selected":""}>Verde</option>
+                    <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>Amarela</option>
+                    <option value="red" ${c.tag_color==="red"?"selected":""}>Vermelha</option>
+                    <option value="black" ${c.tag_color==="black"?"selected":""}>Preta</option>
+                  </select>
+                </label>
+
+                <label>
+                  <strong>Motivo da faixa</strong>
+                  <input class="edit-reason" value="${escapeHtml(c.tag_reason||"")}" placeholder="Ex.: faltou, VIP, atenção..." style="width:100%;margin-top:5px">
+                </label>
+              </div>
+
+              <label style="display:block;margin-top:12px">
+                <strong>Observação do cliente</strong>
+                <textarea class="edit-notes" rows="3" style="width:100%;margin-top:5px" placeholder="Ex.: prefere máquina 1, paga no Pix, tem sensibilidade...">${escapeHtml(c.notes||"")}</textarea>
+              </label>
+
+              <div class="action-row" style="margin-top:12px">
+                <button class="btn-small btn-dark save-client">💾 Salvar</button>
+                <button class="btn-small btn-light cancel-edit-client">Cancelar</button>
+              </div>
             </div>`;
 
-          item.querySelector(".edit-client").onclick=async()=>{
-            const name=prompt("Nome e sobrenome:",c.full_name||"");
-            if(name===null)return;
-            if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}
-            const notes=prompt("Observações:",c.notes||"");
-            const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");
-            if(tag!==null&&!["","green","yellow","red"].includes(tag.trim().toLowerCase())){
-              alert("Use green, yellow, red ou deixe vazio.");return;
+          const editBox=item.querySelector(".client-inline-edit");
+
+          item.querySelector(".edit-client").onclick=()=>{
+            editBox.style.display=editBox.style.display==="none"?"block":"none";
+          };
+
+          item.querySelector(".cancel-edit-client").onclick=()=>{
+            editBox.style.display="none";
+          };
+
+          item.querySelector(".save-client").onclick=async()=>{
+            const name=item.querySelector(".edit-name").value.trim();
+            const tag=item.querySelector(".edit-tag").value||null;
+            const reason=item.querySelector(".edit-reason").value.trim()||null;
+            const notes=item.querySelector(".edit-notes").value.trim()||null;
+
+            if(!hasFullName(name)){
+              alert("Informe nome e sobrenome.");
+              return;
             }
-            const tagReason=prompt("Motivo da faixa:",c.tag_reason||"");
+
             try{
               const {error}=await supabase.rpc("update_client_profile",{
                 p_client_id:c.id,
                 p_full_name:name,
                 p_phone:c.phone,
-                p_tag_color:(tag||"").trim().toLowerCase()||null,
-                p_notes:notes||null,
-                p_tag_reason:tagReason||null
+                p_tag_color:tag,
+                p_notes:notes,
+                p_tag_reason:reason
               });
               if(error)throw error;
+              alert("Cadastro atualizado.");
               run();
-            }catch(e){alert(e.message||"Não foi possível atualizar o cliente.")}
+            }catch(e){
+              console.error(e);
+              alert(e.message||"Não foi possível atualizar o cliente.");
+            }
           };
 
           item.querySelector(".block-client").onclick=async()=>{
@@ -2551,17 +2623,6 @@ Te esperamos!
               if(error)throw error;
               run();
             }catch(e){alert(e.message||"Não foi possível arquivar.")}
-          });
-
-          item.querySelector(".delete-client")?.addEventListener("click",async()=>{
-            if(!confirm("EXCLUIR DEFINITIVAMENTE este cliente?"))return;
-            const again=prompt('Digite EXCLUIR para confirmar:');
-            if(again!=="EXCLUIR")return;
-            try{
-              const {error}=await supabase.rpc("delete_client_permanently",{p_client_id:c.id});
-              if(error)throw error;
-              run();
-            }catch(e){alert(e.message||"Não foi possível excluir.")}
           });
 
           list.appendChild(item);
@@ -2589,53 +2650,92 @@ Te esperamos!
   async function renderClientTimeline(c){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="loading">Carregando histórico do cliente...</div>`;
+
     try{
       const {data,error}=await supabase.rpc("get_client_history_summary",{p_client_id:Number(c.id)});
       if(error)throw error;
 
       const rows=data?.appointments||[];
       const summary=data?.summary||{};
-      const weekday = v=>{
-        if(!v) return "—";
+      const weekday=v=>{
+        if(!v)return "—";
         const d=weekDayName(v);
-        return d ? d.charAt(0).toUpperCase()+d.slice(1) : "—";
+        return d?d.charAt(0).toUpperCase()+d.slice(1):"—";
       };
 
       panelContent.innerHTML=`
         <div class="panel-content-head">
           <div>
             <h2>${escapeHtml(c.full_name||"Cliente")}</h2>
-            <p class="muted">Histórico completo de procedimentos, valores e consumo.</p>
+            <p class="muted">Cadastro, observações e histórico financeiro do cliente.</p>
           </div>
           <button id="backToClients" class="btn btn-light">← Voltar para clientes</button>
         </div>
 
         <div class="card" style="margin-bottom:16px">
-          <h3>👤 Cadastro do cliente</h3>
-          <div class="info-grid">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
             <div>
-              <strong>WhatsApp</strong>
-              <div class="muted">${escapeHtml(c.phone||"—")}</div>
+              <h3 style="margin-top:0">👤 Cadastro do cliente</h3>
+              <div class="muted">📱 ${escapeHtml(c.phone||"—")}</div>
             </div>
-            <div>
-              <strong>Faixa</strong>
-              <div style="margin-top:6px">
-                <span class="pill">${tagLabel(c.tag_color)}</span>
-              </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <span class="pill">${tagLabel(c.tag_color)}</span>
+              ${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'}
             </div>
-            <div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
+            <div style="padding:12px;background:#fafafa;border-radius:12px;border:1px solid #e5e5e5">
               <strong>Motivo da faixa</strong>
               <div class="muted">${escapeHtml(c.tag_reason||"Não informado")}</div>
             </div>
-            <div>
+            <div style="padding:12px;background:#fafafa;border-radius:12px;border:1px solid #e5e5e5">
               <strong>Observação</strong>
-              <div class="muted">${escapeHtml(c.notes||"—")}</div>
+              <div class="muted">${escapeHtml(c.notes||"Nenhuma observação")}</div>
             </div>
           </div>
 
           <div class="action-row" style="margin-top:14px">
-            <button id="editClientDetails" class="btn btn-light">✏️ Editar nome, faixa e observação</button>
-            ${currentProfile?.role==="admin" ? `<button id="clearClientHistory" class="btn btn-danger">🧹 Limpar histórico de teste</button>` : ""}
+            <button id="editClientDetails" class="btn btn-dark">✏️ Editar cadastro completo</button>
+            ${c.phone?`<button id="clientTimelineWhatsapp" class="btn btn-light">💬 WhatsApp</button>`:""}
+            ${currentProfile?.role==="admin"?`<button id="clearClientHistory" class="btn btn-danger">🧹 Limpar todos os procedimentos</button>`:""}
+          </div>
+
+          <div id="clientEditBox" style="display:none;margin-top:16px;padding:16px;border:1px solid #ddd;border-radius:14px;background:#fafafa">
+            <h4 style="margin-top:0">Editar cliente</h4>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+              <label>
+                <strong>Nome e sobrenome</strong>
+                <input id="clientEditName" value="${escapeHtml(c.full_name||"")}" style="width:100%;margin-top:5px">
+              </label>
+
+              <label>
+                <strong>Faixa</strong>
+                <select id="clientEditTag" style="width:100%;margin-top:5px">
+                  <option value="" ${!c.tag_color?"selected":""}>Sem faixa</option>
+                  <option value="green" ${c.tag_color==="green"?"selected":""}>Verde</option>
+                  <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>Amarela</option>
+                  <option value="red" ${c.tag_color==="red"?"selected":""}>Vermelha</option>
+                  <option value="black" ${c.tag_color==="black"?"selected":""}>Preta</option>
+                </select>
+              </label>
+
+              <label>
+                <strong>Motivo da faixa</strong>
+                <input id="clientEditReason" value="${escapeHtml(c.tag_reason||"")}" placeholder="Ex.: faltou, VIP, atenção..." style="width:100%;margin-top:5px">
+              </label>
+            </div>
+
+            <label style="display:block;margin-top:12px">
+              <strong>Observação específica</strong>
+              <textarea id="clientEditNotes" rows="4" style="width:100%;margin-top:5px" placeholder="Digite observações importantes sobre este cliente">${escapeHtml(c.notes||"")}</textarea>
+            </label>
+
+            <div class="action-row" style="margin-top:12px">
+              <button id="saveClientDetails" class="btn btn-dark">💾 Salvar alterações</button>
+              <button id="cancelClientDetails" class="btn btn-light">Cancelar</button>
+            </div>
           </div>
         </div>
 
@@ -2647,71 +2747,116 @@ Te esperamos!
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>✂️ Histórico de procedimentos</h3>
-          <div id="clientProcedureHistory"></div>
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+            <div>
+              <h3 style="margin:0">✂️ Histórico de procedimentos</h3>
+              <p class="muted" style="margin:5px 0 0">${rows.length} procedimento${rows.length===1?"":"s"} concluído${rows.length===1?"":"s"}</p>
+            </div>
+          </div>
+          <div id="clientProcedureHistory" style="margin-top:12px"></div>
         </div>`;
 
       const wrap=document.getElementById("clientProcedureHistory");
+
       if(!rows.length){
         wrap.innerHTML=`<div class="empty">Nenhum procedimento concluído para este cliente.</div>`;
       }else{
-        wrap.innerHTML=`<div class="list">${rows.map(r=>`
-          <div class="list-item">
-            <strong>${escapeHtml(r.service_name||"Procedimento")}</strong>
-            <div class="muted">📅 ${weekday(r.appointment_date)} às ${(r.start_time||"").slice(0,5)}</div>
-            <div class="muted">💈 ${escapeHtml(r.barber_name||"—")}</div>
-            <div>Valor cobrado: <strong>${money(r.price_charged||0)}</strong></div>
-            <div>Valor pago: <strong>${money(r.amount_paid||0)}</strong> • ${escapeHtml(paymentLabel(r.payment_method||""))}</div>
-          </div>`).join("")}</div>`;
+        rows.forEach(r=>{
+          const card=document.createElement("div");
+          card.className="list-item";
+          card.style.marginBottom="10px";
+          card.innerHTML=`
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+              <div>
+                <strong style="font-size:17px">${escapeHtml(r.service_name||"Procedimento")}</strong>
+                <div class="muted" style="margin-top:5px">📅 ${weekday(r.appointment_date)} às ${(r.start_time||"").slice(0,5)}</div>
+                <div class="muted">💈 ${escapeHtml(r.barber_name||"—")}</div>
+              </div>
+              <div style="text-align:right">
+                <div>Valor cobrado: <strong>${money(r.price_charged||0)}</strong></div>
+                <div>Valor pago: <strong>${money(r.amount_paid||0)}</strong></div>
+                <div class="muted">${escapeHtml(paymentLabel(r.payment_method||""))}</div>
+              </div>
+            </div>
+
+            <div class="action-row" style="margin-top:10px">
+              <button class="btn-small btn-danger delete-procedure">🗑️ Excluir este procedimento</button>
+            </div>`;
+
+          card.querySelector(".delete-procedure").addEventListener("click",async()=>{
+            const ok=confirm(
+              `Excluir o procedimento "${r.service_name||"Procedimento"}" deste cliente?\n\n`+
+              `Esse atendimento será removido do histórico e do total consumido.`
+            );
+            if(!ok)return;
+
+            try{
+              const {error}=await supabase.rpc("delete_appointment_managed",{
+                p_appointment_id:Number(r.appointment_id)
+              });
+              if(error)throw error;
+              alert("Procedimento excluído do histórico.");
+              renderClientTimeline(c);
+            }catch(e){
+              console.error(e);
+              alert(e.message||"Não foi possível excluir este procedimento.");
+            }
+          });
+
+          wrap.appendChild(card);
+        });
       }
 
       document.getElementById("backToClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
 
-      document.getElementById("editClientDetails").onclick=async()=>{
-        const name=prompt("Nome e sobrenome:",c.full_name||"");
-        if(name===null)return;
-        if(!hasFullName(name)){alert("Informe nome e sobrenome.");return;}
+      document.getElementById("clientTimelineWhatsapp")?.addEventListener("click",()=>{
+        window.open(`https://wa.me/${phoneForWhatsapp(c.phone)}`,"_blank");
+      });
 
-        const notes=prompt("Observação específica deste cliente:",c.notes||"");
-        if(notes===null)return;
+      document.getElementById("editClientDetails").onclick=()=>{
+        const box=document.getElementById("clientEditBox");
+        box.style.display=box.style.display==="none"?"block":"none";
+      };
 
-        const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");
-        if(tag===null)return;
-        const tagValue=tag.trim().toLowerCase();
-        if(!["","green","yellow","red"].includes(tagValue)){
-          alert("Use green, yellow, red ou deixe vazio.");
+      document.getElementById("cancelClientDetails")?.addEventListener("click",()=>{
+        document.getElementById("clientEditBox").style.display="none";
+      });
+
+      document.getElementById("saveClientDetails")?.addEventListener("click",async()=>{
+        const name=document.getElementById("clientEditName").value.trim();
+        const tag=document.getElementById("clientEditTag").value||null;
+        const reason=document.getElementById("clientEditReason").value.trim()||null;
+        const notes=document.getElementById("clientEditNotes").value.trim()||null;
+
+        if(!hasFullName(name)){
+          alert("Informe nome e sobrenome.");
           return;
         }
-
-        const reason=prompt("Motivo da faixa:",c.tag_reason||"");
-        if(reason===null)return;
 
         try{
           const {error}=await supabase.rpc("update_client_profile",{
             p_client_id:c.id,
             p_full_name:name,
             p_phone:c.phone,
-            p_tag_color:tagValue||null,
-            p_notes:notes||null,
-            p_tag_reason:reason||null
+            p_tag_color:tag,
+            p_notes:notes,
+            p_tag_reason:reason
           });
           if(error)throw error;
 
-          c={...c,full_name:name,tag_color:tagValue||null,notes:notes||null,tag_reason:reason||null};
+          c={...c,full_name:name,tag_color:tag,tag_reason:reason,notes};
           alert("Cadastro do cliente atualizado.");
           renderClientTimeline(c);
         }catch(e){
           console.error(e);
           alert(e.message||"Não foi possível atualizar o cliente.");
         }
-      };
+      });
 
       document.getElementById("clearClientHistory")?.addEventListener("click",async()=>{
         const ok=confirm(
-          `Limpar TODO o histórico de ${c.full_name||"cliente"}?\n\n`+
-          `Isso apaga agendamentos, atendimentos concluídos e lançamentos financeiros ligados a esses agendamentos.\n`+
-          `O cadastro do cliente, nome, telefone, faixa e observação serão mantidos.\n\n`+
-          `Use principalmente para limpar testes.`
+          `Limpar TODOS os procedimentos de ${c.full_name||"cliente"}?\n\n`+
+          `Isso apaga os agendamentos e atendimentos do histórico, mas mantém o cadastro, nome, telefone, faixa e observação.`
         );
         if(!ok)return;
 
