@@ -102,7 +102,14 @@
     .product-card .body{padding:16px}
     .product-card .price{font-size:22px;font-weight:800;margin-top:10px}
     .pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#eee;font-size:12px;font-weight:700}
-    .pill.green{background:#e8f7ec;color:#176b2c}.pill.red{background:#ffe9e9;color:#9d1d1d}
+    .pill.green{background:#e8f7ec;color:#176b2c}.pill.red{background:#ffe9e9;color:#9d1d1d}.pill.yellow{background:#fff4d9;color:#7a5700}.pill.gray{background:#eee;color:#555}
+    .status.awaiting_confirmation{background:#fff4d9;color:#7a5700}.status.confirmation_sent{background:#e8f1ff;color:#1f4d8f}.status.in_service{background:#e9f1ff;color:#294c7a}
+    .tag-dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:-1px}.tag-green{background:#24a148}.tag-yellow{background:#f1c21b}.tag-red{background:#da1e28}.tag-none{background:#aaa}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:12px 0}.toolbar>*{flex:1;min-width:140px}.toolbar button{flex:0 0 auto}
+    .timeline{border-left:3px solid #111;margin:10px 0 0 9px;padding-left:14px;display:grid;gap:10px}.timeline-item{position:relative}.timeline-item:before{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:#111;left:-20px;top:5px}
+    .switch-line{display:flex;gap:10px;align-items:center;margin:10px 0}.switch-line input{width:auto;min-height:auto}.mini-table{width:100%;border-collapse:collapse;font-size:14px}.mini-table th,.mini-table td{border-bottom:1px solid #eee;text-align:left;padding:10px 6px}.mini-table th{font-size:12px;color:#666}
+    .quick-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.quick-actions .btn{min-height:40px}.notice{padding:14px;border-radius:14px;background:#fff8dd;border:1px solid #eed991;color:#674f00;margin:12px 0}
+
     .search-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
     .package-progress{height:9px;background:#eee;border-radius:999px;overflow:hidden;margin-top:8px}
     .package-progress>div{height:100%;background:#111}
@@ -216,8 +223,8 @@
       <button id="closeLoginBtn" class="close-round">×</button>
     </div>
     <p style="color:#666;margin-bottom:22px">Acesso para administrador e barbeiros.</p>
-    <label for="loginEmail">E-mail</label>
-    <input id="loginEmail" type="email" placeholder="Digite seu e-mail">
+    <label for="loginPhone">Telefone / WhatsApp</label>
+    <input id="loginPhone" type="tel" inputmode="numeric" placeholder="Ex.: 44997132698" autocomplete="username">
     <label for="loginPassword">Senha</label>
     <div class="password-wrap">
       <input id="loginPassword" type="password" placeholder="Digite sua senha">
@@ -256,6 +263,28 @@
   </div>
 </dialog>
 
+<dialog id="firstAccessDialog">
+  <div class="login-box">
+    <div class="login-head"><div><div style="font-size:13px;color:#777;font-weight:700">PRIMEIRO ACESSO</div><h2 style="margin:4px 0 0">Crie sua senha pessoal</h2></div></div>
+    <p style="color:#666;line-height:1.5">Você está usando uma senha provisória. Deseja alterar agora?</p>
+    <div class="action-row" style="margin-top:18px">
+      <button id="changeNowBtn" class="btn btn-dark" style="flex:1">🔐 Mudar senha agora</button>
+      <button id="changeLaterBtn" class="btn btn-light" style="flex:1">Fazer depois</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="changePasswordDialog">
+  <div class="login-box">
+    <div class="login-head"><div><div style="font-size:13px;color:#777;font-weight:700">SEGURANÇA</div><h2 style="margin:4px 0 0">Alterar senha</h2></div><button id="closeChangePasswordBtn" class="close-round">×</button></div>
+    <label>Senha atual</label><div class="password-wrap"><input id="currentPassword" type="password"><button class="password-toggle cp-eye" data-target="currentPassword" type="button">👁️</button></div>
+    <label>Nova senha</label><div class="password-wrap"><input id="newPassword" type="password" minlength="6"><button class="password-toggle cp-eye" data-target="newPassword" type="button">👁️</button></div>
+    <label>Confirmar nova senha</label><div class="password-wrap"><input id="confirmNewPassword" type="password" minlength="6"><button class="password-toggle cp-eye" data-target="confirmNewPassword" type="button">👁️</button></div>
+    <button id="saveChangePasswordBtn" class="login-submit" style="margin-top:18px">Salvar nova senha</button>
+    <div id="changePasswordMessage" style="margin-top:12px;text-align:center"></div>
+  </div>
+</dialog>
+
 <section id="restrictedPanel" class="restricted-panel">
   <div class="panel-header">
     <div class="panel-brand">
@@ -275,25 +304,33 @@
 
     <div id="barberPanel" style="display:none">
       <div class="panel-menu">
-        <button class="panel-card" data-view="barberAgenda"><div class="icon">📅</div><h3>Minha agenda</h3><p>Consulte seus horários e clientes.</p></button>
-        <button class="panel-card" data-view="barberServices"><div class="icon">✂️</div><h3>Meus serviços</h3><p>Consulte seus serviços, preços e duração.</p></button>
-        <button class="panel-card" data-view="barberEarnings"><div class="icon">💰</div><h3>Meus ganhos</h3><p>Acompanhe os atendimentos realizados.</p></button>
-        <button class="panel-card" data-view="barberClients"><div class="icon">👤</div><h3>Clientes e pacotes</h3><p>Busque por nome ou WhatsApp e confira histórico e saldo de pacote.</p></button>
-        <button class="panel-card" data-view="barberBlocks"><div class="icon">⛔</div><h3>Bloquear horários</h3><p>Bloqueie folgas, compromissos e períodos indisponíveis.</p></button>
+        <button class="panel-card" data-view="barberToday"><div class="icon">☀️</div><h3>Hoje</h3><p>Próximos clientes, pendências e confirmação rápida.</p></button>
+        <button class="panel-card" data-view="barberAgenda"><div class="icon">📅</div><h3>Minha agenda</h3><p>Agenda completa, status, WhatsApp e pagamentos.</p></button>
+        <button class="panel-card" data-view="barberNewAttendance"><div class="icon">➕</div><h3>Novo atendimento</h3><p>Cadastre cliente que chegou por fora do aplicativo.</p></button>
+        <button class="panel-card" data-view="barberClients"><div class="icon">👤</div><h3>Clientes</h3><p>Cadastro, faixas, observações e histórico.</p></button>
+        <button class="panel-card" data-view="barberReturns"><div class="icon">🔁</div><h3>Retornos</h3><p>Clientes para chamar novamente em 7, 15, 20 ou 30 dias.</p></button>
+        <button class="panel-card" data-view="barberAvailability"><div class="icon">🕘</div><h3>Meus horários</h3><p>Defina expediente, folga e indisponibilidades com motivo.</p></button>
+        <button class="panel-card" data-view="barberServices"><div class="icon">✂️</div><h3>Meus serviços</h3><p>Serviços, preços, duração e promoções.</p></button>
+        <button class="panel-card" data-view="barberEarnings"><div class="icon">💰</div><h3>Meus resultados</h3><p>Atendimentos, formas de pagamento e cortesias.</p></button>
+        <button class="panel-card" data-view="barberProfile"><div class="icon">⚙️</div><h3>Meu perfil</h3><p>Senha, Pix, recuperação e preferências.</p></button>
       </div>
     </div>
 
     <div id="adminPanel" style="display:none">
       <div class="panel-menu">
-        <button class="panel-card" data-view="adminAgenda"><div class="icon">📅</div><h3>Agenda geral</h3><p>Veja os horários de todos os barbeiros.</p></button>
-        <button class="panel-card" data-view="adminBarbers"><div class="icon">💈</div><h3>Barbeiros</h3><p>Cadastre e gerencie a equipe.</p></button>
-        <button class="panel-card" data-view="adminServices"><div class="icon">✂️</div><h3>Serviços e promoções</h3><p>Adicione, edite, retire serviços e configure promoções.</p></button>
-        <button class="panel-card" data-view="adminPackages"><div class="icon">🎫</div><h3>Pacotes mensais</h3><p>Crie pacotes, preços, quantidade e validade.</p></button>
-        <button class="panel-card" data-view="adminProducts"><div class="icon">🧴</div><h3>Produtos</h3><p>Cadastre foto, nome, preço, descrição e estoque.</p></button>
-        <button class="panel-card" data-view="adminClients"><div class="icon">👥</div><h3>Clientes e pacotes</h3><p>Consulte histórico e vincule pacotes aos clientes.</p></button>
-        <button class="panel-card" data-view="adminBlocks"><div class="icon">⛔</div><h3>Bloquear horários</h3><p>Gerencie indisponibilidades dos barbeiros.</p></button>
-        <button class="panel-card" data-view="adminFinance"><div class="icon">💰</div><h3>Financeiro</h3><p>Consulte faturamento e resultados.</p></button>
-        <button class="panel-card" data-view="adminReports"><div class="icon">📊</div><h3>Relatórios</h3><p>Acompanhe o desempenho da barbearia.</p></button>
+        <button class="panel-card" data-view="adminToday"><div class="icon">☀️</div><h3>Hoje</h3><p>Resumo da barbearia e confirmações pendentes.</p></button>
+        <button class="panel-card" data-view="adminAgenda"><div class="icon">📅</div><h3>Agenda geral</h3><p>Todos os horários, status e pagamentos.</p></button>
+        <button class="panel-card" data-view="adminUsers"><div class="icon">🔐</div><h3>Usuários e acessos</h3><p>Barbeiros e administradores por telefone e senha.</p></button>
+        <button class="panel-card" data-view="adminNewAttendance"><div class="icon">➕</div><h3>Novo atendimento</h3><p>Cadastre clientes e atendimentos manualmente.</p></button>
+        <button class="panel-card" data-view="adminClients"><div class="icon">👥</div><h3>Clientes</h3><p>Editar, bloquear, excluir/arquivar, faixas e observações.</p></button>
+        <button class="panel-card" data-view="adminReturns"><div class="icon">🔁</div><h3>Retornos</h3><p>Lembretes de clientes para voltar à barbearia.</p></button>
+        <button class="panel-card" data-view="adminAvailability"><div class="icon">🕘</div><h3>Horários e folgas</h3><p>Expediente, folgas, bloqueios e motivos de indisponibilidade.</p></button>
+        <button class="panel-card" data-view="adminDecember"><div class="icon">🎄</div><h3>Dezembro / alta demanda</h3><p>Horários especiais, sinal e lista de espera opcionais.</p></button>
+        <button class="panel-card" data-view="adminServices"><div class="icon">✂️</div><h3>Serviços e promoções</h3><p>Preços, duração, promoções e análise por procedimento.</p></button>
+        <button class="panel-card" data-view="adminPackages"><div class="icon">🎫</div><h3>Pacotes mensais</h3><p>Crie pacotes, quantidade e validade.</p></button>
+        <button class="panel-card" data-view="adminProducts"><div class="icon">🧴</div><h3>Produtos</h3><p>Foto, preço, estoque e descrição.</p></button>
+        <button class="panel-card" data-view="adminFinance"><div class="icon">💰</div><h3>Financeiro</h3><p>Pago, pendente, cortesia e formas de pagamento.</p></button>
+        <button class="panel-card" data-view="adminReports"><div class="icon">📊</div><h3>Relatórios</h3><p>Períodos, serviços, barbeiros, disponibilidade e comparação.</p></button>
       </div>
     </div>
 
@@ -331,16 +368,31 @@
 
   const money = value => Number(value || 0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-  const normalizePhone = value => String(value || "").replace(/\D/g,"");
+  const normalizePhone = value => String(value || "").replace(/\D/g,"").replace(/^55(?=\d{10,11}$)/,"");
+  const authPhone = value => `+55${normalizePhone(value)}`;
+  const phoneForWhatsapp = value => `55${normalizePhone(value)}`;
   const hasFullName = value => String(value || "").trim().split(/\s+/).filter(Boolean).length >= 2;
   function formatDate(value){
     if(!value) return "—";
     const [y,m,d] = value.split("-");
     return `${d}/${m}/${y}`;
   }
-  function formatDateTime(date,time){
-    return `${formatDate(date)} às ${(time || "").slice(0,5)}`;
+  function weekDayName(value){
+    if(!value) return "";
+    return new Intl.DateTimeFormat("pt-BR",{weekday:"long",timeZone:"America/Sao_Paulo"}).format(new Date(value+"T12:00:00"));
   }
+  function formatDateWithWeekday(value){
+    if(!value) return "—";
+    const day=weekDayName(value);
+    return `${day.charAt(0).toUpperCase()+day.slice(1)}, ${formatDate(value)}`;
+  }
+  function formatDateTime(date,time){ return `${formatDateWithWeekday(date)} às ${(time || "").slice(0,5)}`; }
+  const BARBERSHOP_ADDRESS = "Av. Cuiabá, 1193 - Jd. Esperança - Sarandi/PR";
+  const BARBERSHOP_MAP = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(BARBERSHOP_ADDRESS)}`;
+  function addDays(dateStr,days){ const d=new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()+Number(days||0)); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+  function daysBetween(a,b){ return Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/86400000); }
+  function safeVal(v){ return v===null||v===undefined?"":v; }
+
 
   const dayNames = {
     1:"Segunda", 2:"Terça", 3:"Quarta", 4:"Quinta", 5:"Sexta", 6:"Sábado", 7:"Domingo"
@@ -592,7 +644,7 @@ Gostaria de confirmar meu agendamento.`;
     loadSlots();
   });
 
-  function statusLabel(status){
+  function legacyStatusLabel(status){
     const map = {pending:"Pendente",confirmed:"Confirmado",completed:"Concluído",cancelled:"Cancelado",no_show:"Não compareceu"};
     return map[status] || status || "—";
   }
@@ -613,7 +665,7 @@ Gostaria de confirmar meu agendamento.`;
     panelContent.innerHTML = "";
     if(profile.role === "admin"){
       panelRole.textContent = "Administrador";
-      panelWelcome.textContent = "Painel administrativo";
+      panelWelcome.textContent = `Olá, ${profile.name || profile.admin_name || "Administrador"}`;
       adminPanel.style.display = "block";
       barberPanel.style.display = "none";
     }else{
@@ -638,14 +690,14 @@ Gostaria de confirmar meu agendamento.`;
   async function fetchAppointments(){
     const { data, error } = await supabase
       .from("appointments")
-      .select("id,barber_id,service_id,barber_service_id,client_name,client_phone,appointment_date,start_time,end_time,price_charged,status,notes,client_package_id")
+      .select("*")
       .order("appointment_date",{ascending:true})
       .order("start_time",{ascending:true});
     if(error) throw error;
     return data || [];
   }
 
-  function appointmentItem(a,showBarber){
+  function legacyAppointmentItem(a,showBarber){
     const barber = barbers.find(b => Number(b.id) === Number(a.barber_id));
     const div = document.createElement("div");
     div.className = "list-item";
@@ -667,7 +719,7 @@ Gostaria de confirmar meu agendamento.`;
     return div;
   }
 
-  async function renderAgenda(adminMode){
+  async function legacyRenderAgenda(adminMode){
     panelContent.className = "panel-content active";
     panelContent.innerHTML = `<div class="panel-content-head"><div><h2>${adminMode ? "Agenda geral" : "Minha agenda"}</h2><p class="muted">Agendamentos registrados no sistema.</p></div></div><div class="loading">Carregando...</div>`;
     try{
@@ -1459,23 +1511,218 @@ Gostaria de confirmar meu agendamento.`;
     }
   }
 
+
+  // ===== VERSÃO FINAL 2026: agenda, clientes, confirmações, pagamentos, retornos e relatórios =====
+  function statusLabel(status){
+    const map={awaiting_confirmation:"Aguardando confirmação",pending:"Aguardando confirmação",confirmed:"Confirmado",confirmation_sent:"Confirmação enviada",in_service:"Em atendimento",completed:"Realizado",cancelled:"Cancelado",no_show:"Não compareceu"};
+    return map[status]||status||"—";
+  }
+  function paymentLabel(v){ return ({pix:"Pix",cash:"Dinheiro",debit:"Débito",credit:"Crédito",package:"Pacote",courtesy:"Cortesia",pending:"Pendente",other:"Outro"})[v]||v||"Não informado"; }
+  function tagLabel(v){ return ({green:"Verde",yellow:"Amarela",red:"Vermelha"})[v]||"Sem faixa"; }
+  function serviceNameFromAppointment(a){ return a.service_name || a.service_label || `Serviço #${a.service_id||a.barber_service_id||"—"}`; }
+  function isPaidAppointment(a){ return a.status==="completed" && !["courtesy","pending"].includes(a.payment_method) && Number(a.amount_paid??a.price_charged??0)>0; }
+
+  async function updateAppointmentFields(id,fields){
+    const {error}=await supabase.from("appointments").update(fields).eq("id",id); if(error) throw error;
+  }
+  function confirmationMessage(a){
+    const barber=barbers.find(b=>Number(b.id)===Number(a.barber_id));
+    return `Olá, ${a.client_name||"cliente"}! 💈✂️\n\nSeu agendamento na *Barbearia BarberStylo* foi confirmado!\n\n👤 Barbeiro: ${barber?.name||"—"}\n✂️ Serviço: ${serviceNameFromAppointment(a)}\n📅 ${formatDateWithWeekday(a.appointment_date)}\n🕒 Horário: ${(a.start_time||"").slice(0,5)}\n📍 ${BARBERSHOP_ADDRESS}\n🗺️ Localização: ${BARBERSHOP_MAP}\n\nTe esperamos!\n*BarberStylo — Seu estilo começa aqui!*`;
+  }
+  async function openClientWhatsapp(a,kind="confirmation"){
+    const phone=phoneForWhatsapp(a.client_phone); if(phone.length<12){alert("WhatsApp do cliente inválido.");return}
+    let text=confirmationMessage(a);
+    if(kind==="return") text=`Olá, ${a.client_name||"cliente"}! 💈✂️\nJá faz um tempinho desde o seu último atendimento na BarberStylo. Quer reservar seu próximo horário?\n\n📍 ${BARBERSHOP_ADDRESS}\n\nSerá um prazer te receber novamente!`;
+    if(kind==="pix"){
+      const pix=currentProfile?.pix_key||"";
+      text=`Olá, ${a.client_name||"cliente"}! 💈\nSegue a chave Pix para pagamento:\n\n🔑 ${pix}\n\nBarberStylo`;
+    }
+    if(kind==="confirmation"){
+      try{ await updateAppointmentFields(a.id,{status:"confirmation_sent",confirmation_sent_at:new Date().toISOString()}); a.status="confirmation_sent"; a.confirmation_sent_at=new Date().toISOString(); }catch(e){ console.warn(e); }
+    }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
+  }
+  async function finalizeAppointment(a){
+    const method=prompt("Forma de pagamento: pix, dinheiro, debito, credito, pacote, cortesia ou pendente",a.payment_method||"pix"); if(method===null)return;
+    const normalized=method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const map={pix:"pix",dinheiro:"cash",debito:"debit",credito:"credit",pacote:"package",cortesia:"courtesy",pendente:"pending"};
+    const payment=map[normalized]||normalized;
+    const defaultPaid=payment==="courtesy"?0:Number(a.price_charged||0);
+    const paid=Number(prompt("Quanto foi pago?",String(defaultPaid).replace(".",","))?.replace(",","."));
+    if(!Number.isFinite(paid)){alert("Valor inválido.");return}
+    const courtesyReason=payment==="courtesy" ? (prompt("Motivo da cortesia (opcional):","")||null) : null;
+    try{
+      await updateAppointmentFields(a.id,{status:"completed",payment_method:payment,amount_paid:payment==="courtesy"?0:paid,courtesy_reason:courtesyReason,completed_at:new Date().toISOString(),next_return_date:addDays(a.appointment_date,15)});
+      alert("Atendimento finalizado e registrado.");
+      currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false);
+    }catch(e){console.error(e);alert("O banco ainda precisa da atualização final de pagamentos. Vamos fazer no próximo passo.");}
+  }
+  function appointmentItem(a,showBarber){
+    const barber=barbers.find(b=>Number(b.id)===Number(a.barber_id));
+    const div=document.createElement("div"); div.className="list-item";
+    const sent=a.confirmation_sent_at?`📲 Confirmação enviada ${new Date(a.confirmation_sent_at).toLocaleString("pt-BR")}`:"";
+    div.innerHTML=`
+      <strong>${escapeHtml(a.client_name||"Cliente")}</strong>
+      ${showBarber?`<div class="muted">Barbeiro: ${escapeHtml(barber?.name||"—")}</div>`:""}
+      <div>📅 ${formatDateTime(a.appointment_date,a.start_time)}</div>
+      <div>✂️ ${escapeHtml(serviceNameFromAppointment(a))}</div>
+      <div class="muted">WhatsApp: ${escapeHtml(a.client_phone||"—")} • Cobrado: ${money(a.price_charged)}</div>
+      ${a.status==="completed"?`<div class="muted">Recebido: ${money(a.amount_paid??a.price_charged)} • ${paymentLabel(a.payment_method)}</div>`:""}
+      <div><span class="status ${a.status||""}">${statusLabel(a.status)}</span> ${sent?`<span class="pill green">${sent}</span>`:""}</div>
+      <div class="action-row">
+        ${!["confirmed","confirmation_sent","completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light confirm-only">✅ Confirmar</button>`:""}
+        ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light confirm-wa">💬 ${a.confirmation_sent_at?"Abrir WhatsApp novamente":"Confirmar e WhatsApp"}</button>`:""}
+        ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light start-service">✂️ Iniciar</button>`:""}
+        ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light finish-service">💰 Finalizar</button>`:""}
+        ${a.status!=="cancelled"&&a.status!=="completed"?`<button class="btn-small btn-danger cancel-service">Cancelar e liberar</button><button class="btn-small btn-danger no-show">Não compareceu</button>`:""}
+        ${currentProfile?.pix_enabled&&currentProfile?.pix_key?`<button class="btn-small btn-light send-pix">🔑 Enviar Pix</button>`:""}
+      </div>`;
+    div.querySelector(".confirm-only")?.addEventListener("click",async()=>{try{await updateAppointmentFields(a.id,{status:"confirmed",confirmed_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)}catch(e){alert("Não foi possível confirmar.")}});
+    div.querySelector(".confirm-wa")?.addEventListener("click",()=>{ if(a.confirmation_sent_at && !confirm("A confirmação já foi enviada para este cliente. Deseja abrir o WhatsApp novamente?")) return; openClientWhatsapp(a,"confirmation"); });
+    div.querySelector(".start-service")?.addEventListener("click",async()=>{try{await updateAppointmentFields(a.id,{status:"in_service",service_started_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)}catch(e){alert("Não foi possível iniciar.")}});
+    div.querySelector(".finish-service")?.addEventListener("click",()=>finalizeAppointment(a));
+    div.querySelector(".cancel-service")?.addEventListener("click",async()=>{if(!confirm("Cancelar e liberar este horário?"))return;await updateAppointmentFields(a.id,{status:"cancelled",cancelled_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)});
+    div.querySelector(".no-show")?.addEventListener("click",async()=>{if(!confirm("Marcar como não compareceu?"))return;await updateAppointmentFields(a.id,{status:"no_show",no_show_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)});
+    div.querySelector(".send-pix")?.addEventListener("click",()=>openClientWhatsapp(a,"pix"));
+    return div;
+  }
+
+  async function renderToday(adminMode=false){
+    panelContent.className="panel-content active"; panelContent.innerHTML=`<div class="loading">Carregando hoje...</div>`;
+    try{
+      const all=await fetchAppointments(), today=new Date().toISOString().slice(0,10);
+      const items=all.filter(a=>a.appointment_date===today && (adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id)));
+      const pending=items.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
+      const confirmed=items.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
+      const completed=items.filter(a=>a.status==="completed");
+      const next=items.filter(a=>!["completed","cancelled","no_show"].includes(a.status)).sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""))[0];
+      panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Hoje — ${formatDateWithWeekday(today)}</h2><p class="muted">Resumo rápido do dia.</p></div></div>
+      <div class="stats-grid"><div class="stat"><small>Aguardando confirmação</small><strong>${pending.length}</strong></div><div class="stat"><small>Confirmados</small><strong>${confirmed.length}</strong></div><div class="stat"><small>Realizados</small><strong>${completed.length}</strong></div><div class="stat"><small>Próximo</small><strong style="font-size:18px">${next?(next.start_time||"").slice(0,5)+" • "+escapeHtml(next.client_name):"—"}</strong></div></div>
+      <div class="quick-actions">${pending.length?`<button id="confirmAllToday" class="btn btn-dark">✅ Confirmar todos de hoje (${pending.length})</button>`:""}<button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button></div>
+      <div id="todayList" class="list"></div>`;
+      const list=document.getElementById("todayList"); items.sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||"")).forEach(a=>list.appendChild(appointmentItem(a,adminMode))); if(!items.length)list.innerHTML=`<div class="empty">Nenhum atendimento hoje.</div>`;
+      document.getElementById("openFullAgenda")?.addEventListener("click",()=>renderAgenda(adminMode));
+      document.getElementById("confirmAllToday")?.addEventListener("click",async()=>{
+        if(!confirm(`Confirmar ${pending.length} horário(s) de hoje?`))return;
+        for(const a of pending){ try{await updateAppointmentFields(a.id,{status:"confirmed",confirmed_at:new Date().toISOString()});a.status="confirmed"}catch(e){} }
+        panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Confirmados ✅</h2><p class="muted">Agora clique no WhatsApp de cada cliente. A mensagem já abre pronta.</p></div></div><div id="massWhatsapp" class="list"></div>`;
+        const out=document.getElementById("massWhatsapp"); pending.forEach(a=>{const d=document.createElement("div");d.className="list-item";d.innerHTML=`<strong>${escapeHtml(a.client_name)}</strong><div>${formatDateTime(a.appointment_date,a.start_time)}</div><button class="btn btn-dark wa">💬 Abrir WhatsApp</button>`;d.querySelector(".wa").onclick=()=>openClientWhatsapp(a,"confirmation");out.appendChild(d)});
+      });
+    }catch(e){console.error(e);panelContent.innerHTML=`<div class="empty">Não foi possível carregar o resumo de hoje.</div>`}
+  }
+
+  async function renderAgenda(adminMode){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${adminMode?"Agenda geral":"Minha agenda"}</h2><p class="muted">Filtre por data e status.</p></div></div>
+    <div class="toolbar"><div><label>Data</label><input id="agendaDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Status</label><select id="agendaStatus"><option value="">Todos</option><option value="pending">Aguardando confirmação</option><option value="confirmed">Confirmados</option><option value="confirmation_sent">Confirmação enviada</option><option value="completed">Realizados</option><option value="cancelled">Cancelados</option><option value="no_show">Não compareceu</option></select></div>${adminMode?`<div><label>Barbeiro</label><select id="agendaBarber"><option value="">Todos</option>${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<button id="agendaFilter" class="btn btn-dark">Filtrar</button></div><div id="agendaList" class="list"><div class="loading">Carregando...</div></div>`;
+    async function load(){
+      try{ const all=await fetchAppointments(), date=document.getElementById("agendaDate").value,status=document.getElementById("agendaStatus").value,bid=adminMode?document.getElementById("agendaBarber").value:currentProfile?.barber_id; let v=all.filter(a=>(!date||a.appointment_date===date)&&(!status||(status==="pending"?["pending","awaiting_confirmation"].includes(a.status):a.status===status))&&(!bid||Number(a.barber_id)===Number(bid))); const list=document.getElementById("agendaList");list.innerHTML="";v.forEach(a=>list.appendChild(appointmentItem(a,adminMode)));if(!v.length)list.innerHTML=`<div class="empty">Nenhum agendamento neste filtro.</div>`;}catch(e){console.error(e)}
+    }
+    document.getElementById("agendaFilter").onclick=load; await load();
+  }
+
+  async function renderNewAttendance(adminMode=false){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Novo atendimento manual</h2><p class="muted">Para cliente que veio pelo WhatsApp, indicação ou presencialmente.</p></div></div>
+      <div class="list-item"><div class="form-grid">${adminMode?`<div><label>Barbeiro</label><select id="manualBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<div><label>Nome e sobrenome *</label><input id="manualName"></div><div><label>WhatsApp *</label><input id="manualPhone"></div><div><label>Serviço/procedimento *</label><input id="manualService" placeholder="Ex.: Degradê"></div><div><label>Data *</label><input id="manualDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Horário</label><input id="manualTime" type="time"></div><div><label>Valor cobrado</label><input id="manualCharged" type="number" step="0.01"></div><div><label>Valor pago</label><input id="manualPaid" type="number" step="0.01"></div><div><label>Pagamento</label><select id="manualPayment"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="package">Pacote</option><option value="courtesy">Cortesia</option><option value="pending">Pendente</option></select></div><div><label>Faixa do cliente</label><select id="manualTag"><option value="">Sem faixa</option><option value="green">🟢 Verde</option><option value="yellow">🟡 Amarela</option><option value="red">🔴 Vermelha</option></select></div><div class="full"><label>Observação</label><textarea id="manualNotes"></textarea></div></div><button id="saveManualAttendance" class="btn btn-dark">Salvar atendimento</button></div>`;
+    document.getElementById("saveManualAttendance").onclick=async()=>{
+      const name=document.getElementById("manualName").value.trim(),phone=normalizePhone(document.getElementById("manualPhone").value);if(!hasFullName(name)||phone.length<10){alert("Informe nome e sobrenome e um WhatsApp válido.");return}
+      const payload={barber_id:adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id),client_name:name,client_phone:phone,service_name:document.getElementById("manualService").value.trim(),appointment_date:document.getElementById("manualDate").value,start_time:document.getElementById("manualTime").value||"00:00",price_charged:Number(document.getElementById("manualCharged").value||0),amount_paid:document.getElementById("manualPayment").value==="courtesy"?0:Number(document.getElementById("manualPaid").value||0),payment_method:document.getElementById("manualPayment").value,status:"completed",notes:document.getElementById("manualNotes").value.trim()||null,completed_at:new Date().toISOString(),next_return_date:addDays(document.getElementById("manualDate").value,15)};
+      try{ const {error}=await supabase.rpc("create_manual_attendance",{p_payload:payload,p_client_tag:document.getElementById("manualTag").value||null});if(error)throw error;alert("Cliente e atendimento cadastrados.");renderNewAttendance(adminMode);}catch(e){console.error(e);alert("A tela está pronta. Falta executar o SQL final para habilitar o cadastro manual.");}
+    };
+  }
+
+  async function renderClientsFinal(adminMode=false){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Clientes</h2><p class="muted">Busque por nome ou WhatsApp. Edite faixa, observações, bloqueio e histórico.</p></div></div><div class="search-row"><div><label>Pesquisar</label><input id="clientSearchFinal" placeholder="Nome ou WhatsApp"></div><button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button></div><div id="clientFinalList" class="list" style="margin-top:14px"></div>`;
+    async function run(){
+      const q=document.getElementById("clientSearchFinal").value.trim(); const list=document.getElementById("clientFinalList"); list.innerHTML=`<div class="loading">Buscando...</div>`;
+      try{const {data,error}=await supabase.rpc("search_clients_full",{p_query:q});if(error)throw error;list.innerHTML="";(data||[]).forEach(c=>{const item=document.createElement("div");item.className="list-item";item.innerHTML=`<strong><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||c.name||"Cliente")}</strong><div class="muted">WhatsApp: ${escapeHtml(c.phone||"—")}</div><div>${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'} <span class="pill">${tagLabel(c.tag_color)}</span></div><div class="muted">Atendimentos: ${c.appointment_count||0} • Total pago: ${money(c.total_paid||0)} • Faltas: ${c.no_show_count||0}</div><div class="muted">Observação: ${escapeHtml(c.notes||"—")}</div><div class="action-row"><button class="btn-small btn-light edit-client">Editar</button><button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button><button class="btn-small btn-light history-client">Histórico</button>${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}</div>`;
+      item.querySelector(".edit-client").onclick=async()=>{const name=prompt("Nome e sobrenome:",c.full_name||c.name||"");if(name===null)return;if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}const notes=prompt("Observações:",c.notes||"");const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");try{const {error}=await supabase.rpc("update_client_profile",{p_client_id:c.id,p_full_name:name,p_phone:c.phone,p_tag_color:tag||null,p_notes:notes||null});if(error)throw error;run()}catch(e){alert("Falta habilitar a atualização final do banco.")}};
+      item.querySelector(".block-client").onclick=async()=>{try{const {error}=await supabase.rpc("set_client_blocked",{p_client_id:c.id,p_blocked:!c.blocked});if(error)throw error;run()}catch(e){alert("Falta habilitar bloqueio no banco.")}};
+      item.querySelector(".history-client").onclick=()=>renderClientTimeline(c);
+      item.querySelector(".archive-client")?.addEventListener("click",async()=>{if(!confirm("Arquivar este cliente? O histórico será preservado."))return;try{const {error}=await supabase.rpc("archive_client",{p_client_id:c.id});if(error)throw error;run()}catch(e){alert("Falta habilitar arquivamento no banco.")}});
+      item.querySelector(".delete-client")?.addEventListener("click",async()=>{if(!confirm("EXCLUIR DEFINITIVAMENTE este cliente? Essa ação pode remover o cadastro e não poderá ser desfeita."))return;const again=prompt('Digite EXCLUIR para confirmar:');if(again!=="EXCLUIR")return;try{const {error}=await supabase.rpc("delete_client_permanently",{p_client_id:c.id});if(error)throw error;run()}catch(e){alert("A exclusão definitiva será habilitada no SQL final.")}});
+      list.appendChild(item)});if(!(data||[]).length)list.innerHTML=`<div class="empty">Nenhum cliente encontrado.</div>`;}catch(e){console.error(e);list.innerHTML=`<div class="empty">A tela de clientes está pronta. Vamos ativar as novas funções no SQL final.</div>`}
+    }
+    document.getElementById("clientSearchBtnFinal").onclick=run;
+  }
+  async function renderClientTimeline(c){
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${escapeHtml(c.full_name||c.name)}</h2><p class="muted">Linha do tempo do cliente.</p></div><button id="backClients" class="btn btn-light">← Voltar</button></div><div id="clientTimeline" class="timeline"><div class="loading">Carregando...</div></div>`;
+    document.getElementById("backClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
+    try{const {data,error}=await supabase.rpc("client_timeline",{p_client_id:c.id});if(error)throw error;const out=document.getElementById("clientTimeline");out.innerHTML=(data||[]).map(x=>`<div class="timeline-item"><strong>${escapeHtml(x.title||x.event_type||"Evento")}</strong><div class="muted">${x.created_at?new Date(x.created_at).toLocaleString("pt-BR"):""}</div><div>${escapeHtml(x.description||"")}</div></div>`).join("")||`<div class="empty">Sem histórico.</div>`;}catch(e){document.getElementById("clientTimeline").innerHTML=`<div class="empty">O histórico detalhado será ativado no SQL final.</div>`}
+  }
+
+  async function renderReturns(adminMode=false){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Retornos</h2><p class="muted">Clientes para chamar novamente.</p></div></div><div class="toolbar"><div><label>Prazo</label><select id="returnDays"><option value="7">7 dias</option><option value="15" selected>15 dias</option><option value="20">20 dias</option><option value="30">30 dias</option></select></div><button id="returnReload" class="btn btn-dark">Atualizar</button></div><div id="returnsList" class="list"></div>`;
+    async function load(){const days=Number(document.getElementById("returnDays").value);const today=new Date().toISOString().slice(0,10);try{let all=await fetchAppointments();all=all.filter(a=>a.status==="completed"&&(adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id)));const latest={};all.forEach(a=>{const k=normalizePhone(a.client_phone);if(!latest[k]||a.appointment_date>latest[k].appointment_date)latest[k]=a});const due=Object.values(latest).filter(a=>daysBetween(a.appointment_date,today)>=days);const out=document.getElementById("returnsList");out.innerHTML="";due.forEach(a=>{const d=document.createElement("div");d.className="list-item";const elapsed=daysBetween(a.appointment_date,today);d.innerHTML=`<strong>${escapeHtml(a.client_name)}</strong><div>Último atendimento: ${formatDateWithWeekday(a.appointment_date)}</div><div class="muted">${elapsed} dias sem vir • ${serviceNameFromAppointment(a)}</div><button class="btn btn-dark wa-return">💬 Chamar no WhatsApp</button>`;d.querySelector(".wa-return").onclick=()=>openClientWhatsapp(a,"return");out.appendChild(d)});if(!due.length)out.innerHTML=`<div class="empty">Nenhum cliente para retorno neste prazo.</div>`;}catch(e){console.error(e)}}
+    document.getElementById("returnReload").onclick=load;await load();
+  }
+
+  async function renderAvailability(adminMode=false){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${adminMode?"Horários e folgas":"Meus horários"}</h2><p class="muted">Configure expediente e registre o motivo quando não for atender.</p></div></div><div class="list-item"><div class="form-grid">${adminMode?`<div><label>Barbeiro</label><select id="availBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<div><label>Data</label><input id="availDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Situação</label><select id="availType"><option value="work">Vou atender</option><option value="day_off">Folga / não vou atender</option><option value="block">Bloquear parte do dia</option><option value="extra">Horário extra</option></select></div><div><label>Início</label><input id="availStart" type="time" value="09:00"></div><div><label>Fim</label><input id="availEnd" type="time" value="20:00"></div><div><label>Motivo</label><select id="availReason"><option value="">—</option><option>Médico / consulta</option><option>Folga</option><option>Compromisso pessoal</option><option>Almoço / intervalo</option><option>Curso / treinamento</option><option>Férias</option><option>Doença</option><option>Manutenção da barbearia</option><option>Horário particular</option><option>Outro</option></select></div><div class="full"><label>Observação</label><input id="availNote" placeholder="Opcional"></div></div><button id="saveAvailability" class="btn btn-dark">Salvar disponibilidade</button></div><div id="availabilityList" class="list" style="margin-top:14px"></div>`;
+    document.getElementById("saveAvailability").onclick=async()=>{const payload={barber_id:adminMode?Number(document.getElementById("availBarber").value):Number(currentProfile.barber_id),schedule_date:document.getElementById("availDate").value,availability_type:document.getElementById("availType").value,start_time:document.getElementById("availStart").value,end_time:document.getElementById("availEnd").value,reason:document.getElementById("availReason").value||null,notes:document.getElementById("availNote").value.trim()||null};try{const {error}=await supabase.from("barber_availability").insert(payload);if(error)throw error;alert("Disponibilidade salva.");renderAvailability(adminMode)}catch(e){alert("A tela está pronta. Vamos criar a tabela de disponibilidade no SQL final.")}};
+    try{let q=supabase.from("barber_availability").select("*").gte("schedule_date",new Date().toISOString().slice(0,10)).order("schedule_date");if(!adminMode)q=q.eq("barber_id",currentProfile.barber_id);const {data,error}=await q;if(error)throw error;document.getElementById("availabilityList").innerHTML=(data||[]).map(x=>`<div class="list-item"><strong>${formatDateWithWeekday(x.schedule_date)}</strong><div>${escapeHtml(x.availability_type)} • ${(x.start_time||"").slice(0,5)}–${(x.end_time||"").slice(0,5)}</div><div class="muted">Motivo: ${escapeHtml(x.reason||"—")} ${x.notes?`• ${escapeHtml(x.notes)}`:""}</div></div>`).join("")||`<div class="empty">Nenhuma configuração futura.</div>`;}catch(e){document.getElementById("availabilityList").innerHTML=`<div class="empty">O histórico de disponibilidade será ativado no SQL final.</div>`}
+  }
+
+  async function renderProfileFinal(){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Meu perfil</h2><p class="muted">Segurança, recuperação e Pix.</p></div></div><div class="list-item"><button id="profileChangePassword" class="btn btn-dark">🔐 Alterar minha senha</button><div class="form-grid"><div><label>E-mail de recuperação (opcional)</label><input id="profileRecoveryEmail" type="email" value="${escapeHtml(currentProfile?.recovery_email||"")}"></div><div><label>Chave Pix</label><input id="profilePixKey" value="${escapeHtml(currentProfile?.pix_key||"")}"></div><div><label>Tipo da chave</label><select id="profilePixType"><option value="phone">Telefone</option><option value="cpf">CPF</option><option value="email">E-mail</option><option value="random">Aleatória</option></select></div><div><label class="switch-line"><input id="profilePixEnabled" type="checkbox" ${currentProfile?.pix_enabled?"checked":""}> Usar Pix nas mensagens</label></div></div><button id="saveProfileFinal" class="btn btn-dark">Salvar perfil</button></div>`;
+    document.getElementById("profileChangePassword").onclick=()=>document.getElementById("changePasswordDialog").showModal();
+    document.getElementById("saveProfileFinal").onclick=async()=>{try{const {data,error}=await supabase.rpc("update_my_access_profile",{p_recovery_email:document.getElementById("profileRecoveryEmail").value.trim()||null,p_pix_key:document.getElementById("profilePixKey").value.trim()||null,p_pix_type:document.getElementById("profilePixType").value,p_pix_enabled:document.getElementById("profilePixEnabled").checked});if(error)throw error;Object.assign(currentProfile,data?.[0]||{});alert("Perfil salvo.")}catch(e){alert("A tela está pronta. Vamos habilitar esses campos no SQL final.")}};
+  }
+
+  async function renderAdminUsers(){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Usuários e acessos</h2><p class="muted">Login por telefone + senha. E-mail de recuperação é opcional.</p></div></div><div class="list-item"><h3>Cadastrar acesso</h3><div class="form-grid"><div><label>Tipo</label><select id="userRole"><option value="barber">Barbeiro</option><option value="admin">Administrador</option></select></div><div><label>Nome</label><input id="userName"></div><div><label>Telefone / WhatsApp</label><input id="userPhone" placeholder="44999999999"></div><div><label>Senha provisória</label><input id="userPassword" type="password" minlength="6"></div><div class="full"><label>E-mail de recuperação (opcional)</label><input id="userRecoveryEmail" type="email"></div></div><button id="createAccessUser" class="btn btn-dark">Cadastrar usuário</button><div class="note" style="margin-top:10px">No primeiro acesso, o usuário poderá mudar a senha agora ou deixar para depois.</div></div><div id="accessUsersList" class="list" style="margin-top:14px"></div>`;
+    async function reload(){try{const body=await callManageBarberUser({action:"list_users"});const out=document.getElementById("accessUsersList");out.innerHTML=(body.users||[]).map(u=>`<div class="list-item"><strong>${escapeHtml(u.name)}</strong><div class="muted">${u.role==="admin"?"Administrador":"Barbeiro"} • ${escapeHtml(u.phone||"—")}</div><div class="muted">Recuperação: ${escapeHtml(u.recovery_email||"Não informado")}</div><div><span class="pill ${u.active?"green":"red"}">${u.active?"ATIVO":"DESATIVADO"}</span></div><div class="action-row"><button class="btn-small btn-light reset-user-pass" data-id="${u.id}" data-role="${u.role}">Redefinir senha</button><button class="btn-small ${u.active?"btn-danger":"btn-light"} toggle-user" data-id="${u.id}" data-role="${u.role}" data-active="${u.active}">${u.active?"Desativar":"Ativar"}</button></div></div>`).join("")||`<div class="empty">Nenhum usuário.</div>`;out.querySelectorAll(".reset-user-pass").forEach(b=>b.onclick=async()=>{const p=prompt("Nova senha provisória (mínimo 6 caracteres):");if(!p||p.length<6)return;try{await callManageBarberUser({action:"set_user_password",profile_id:Number(b.dataset.id),role:b.dataset.role,password:p,force_change:true});alert("Senha redefinida.")}catch(e){alert(e.message)}});out.querySelectorAll(".toggle-user").forEach(b=>b.onclick=async()=>{try{await callManageBarberUser({action:"set_user_active",profile_id:Number(b.dataset.id),role:b.dataset.role,active:b.dataset.active!=="true"});reload()}catch(e){alert(e.message)}})}catch(e){console.error(e);document.getElementById("accessUsersList").innerHTML=`<div class="empty">A interface está pronta. No próximo passo vamos atualizar a Edge Function para usuários por telefone.</div>`}}
+    document.getElementById("createAccessUser").onclick=async()=>{const body={action:"create_user",role:document.getElementById("userRole").value,name:document.getElementById("userName").value.trim(),phone:normalizePhone(document.getElementById("userPhone").value),password:document.getElementById("userPassword").value,recovery_email:document.getElementById("userRecoveryEmail").value.trim()||null,force_change:true};if(!body.name||body.phone.length<10||body.password.length<6){alert("Preencha nome, telefone e senha com pelo menos 6 caracteres.");return}try{await callManageBarberUser(body);alert("Usuário cadastrado.");reload()}catch(e){alert(e.message)}};await reload();
+  }
+
+  function periodBounds(type){const today=new Date();let start=new Date(today);if(type==="day")start=new Date(today);if(type==="week")start.setDate(today.getDate()-6);if(type==="15d")start.setDate(today.getDate()-14);if(type==="month")start=new Date(today.getFullYear(),today.getMonth(),1);if(type==="3m")start=new Date(today.getFullYear(),today.getMonth()-2,1);if(type==="6m")start=new Date(today.getFullYear(),today.getMonth()-5,1);if(type==="1y")start=new Date(today.getFullYear()-1,today.getMonth(),today.getDate());const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;return [iso(start),iso(today)]}
+  async function renderDecemberSettings(){
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>🎄 Dezembro / alta demanda</h2><p class="muted">Configurações opcionais para períodos de movimento intenso.</p></div></div>
+    <div class="list-item"><div class="form-grid"><div><label class="switch-line"><input id="decSpecialHours" type="checkbox"> Ativar horários especiais</label></div><div><label class="switch-line"><input id="decWaitlist" type="checkbox"> Ativar lista de espera</label></div><div><label class="switch-line"><input id="decDeposit" type="checkbox"> Exigir sinal para reserva</label></div><div><label>Sinal (%)</label><input id="decDepositPercent" type="number" min="0" max="100" value="50"></div><div class="full"><label>Mensagem/aviso da agenda</label><textarea id="decMessage" placeholder="Ex.: Em dezembro, confirme seu horário com antecedência."></textarea></div></div><button id="saveDecember" class="btn btn-dark">Salvar configurações</button></div>
+    <div class="card" style="margin-top:14px"><h3>💡 Recursos para dezembro</h3><p class="muted">Use horários extras por barbeiro em “Horários e folgas”, registre encaixes como “Novo atendimento” e acompanhe vagas e faltas nos relatórios.</p></div>`;
+    try{const {data}=await supabase.from("app_settings").select("value").eq("key","december_mode").maybeSingle();const v=data?.value||{};document.getElementById("decSpecialHours").checked=!!v.special_hours;document.getElementById("decWaitlist").checked=!!v.waitlist;document.getElementById("decDeposit").checked=!!v.deposit_enabled;document.getElementById("decDepositPercent").value=v.deposit_percent??50;document.getElementById("decMessage").value=v.message||"";}catch(e){}
+    document.getElementById("saveDecember").onclick=async()=>{const value={special_hours:document.getElementById("decSpecialHours").checked,waitlist:document.getElementById("decWaitlist").checked,deposit_enabled:document.getElementById("decDeposit").checked,deposit_percent:Number(document.getElementById("decDepositPercent").value||0),message:document.getElementById("decMessage").value.trim()};try{const {error}=await supabase.from("app_settings").upsert({key:"december_mode",value},{onConflict:"key"});if(error)throw error;alert("Configurações de dezembro salvas.")}catch(e){alert("A tela está pronta. Vamos criar app_settings no SQL final.")}};
+  }
+
+  async function renderReportsFinal(){
+    panelContent.className="panel-content active";panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Relatórios completos</h2><p class="muted">Atendimentos, serviços, pagamentos e disponibilidade.</p></div></div><div class="toolbar"><div><label>Período</label><select id="reportPeriod"><option value="day">Hoje</option><option value="week">7 dias</option><option value="15d">Quinzena</option><option value="month" selected>Mês</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="1y">1 ano</option><option value="custom">Personalizado</option></select></div><div><label>De</label><input id="reportFrom" type="date"></div><div><label>Até</label><input id="reportTo" type="date"></div><div><label>Barbeiro</label><select id="reportBarber"><option value="">Todos</option>${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div><button id="runReport" class="btn btn-dark">Gerar relatório</button></div><div id="reportOutput"></div>`;
+    const setDates=()=>{if(document.getElementById("reportPeriod").value==="custom")return;const [a,b]=periodBounds(document.getElementById("reportPeriod").value);document.getElementById("reportFrom").value=a;document.getElementById("reportTo").value=b};document.getElementById("reportPeriod").onchange=setDates;setDates();
+    async function run(){const from=document.getElementById("reportFrom").value,to=document.getElementById("reportTo").value,bid=document.getElementById("reportBarber").value;const all=await fetchAppointments();const v=all.filter(a=>a.appointment_date>=from&&a.appointment_date<=to&&(!bid||Number(a.barber_id)===Number(bid)));const completed=v.filter(a=>a.status==="completed");const paid=completed.reduce((s,a)=>s+Number((a.amount_paid ?? (a.payment_method==="courtesy"?0:a.price_charged)) || 0),0);const services={};completed.forEach(a=>{const n=serviceNameFromAppointment(a);services[n]=(services[n]||0)+1});const payments={};completed.forEach(a=>{const n=paymentLabel(a.payment_method);payments[n]=(payments[n]||0)+1});let unavailable=[];try{let q=supabase.from("barber_availability").select("*").gte("schedule_date",from).lte("schedule_date",to);if(bid)q=q.eq("barber_id",Number(bid));const r=await q;unavailable=r.data||[]}catch(e){}const reasons={};unavailable.filter(x=>x.availability_type!=="work"&&x.availability_type!=="extra").forEach(x=>{const k=x.reason||"Sem motivo";reasons[k]=(reasons[k]||0)+1});const out=document.getElementById("reportOutput");out.innerHTML=`<div class="stats-grid"><div class="stat"><small>Atendimentos</small><strong>${completed.length}</strong></div><div class="stat"><small>Recebido</small><strong>${money(paid)}</strong></div><div class="stat"><small>Cortesias</small><strong>${completed.filter(a=>a.payment_method==="courtesy").length}</strong></div><div class="stat"><small>Faltas</small><strong>${v.filter(a=>a.status==="no_show").length}</strong></div></div><div class="info-grid"><div class="card"><h3>✂️ Procedimentos</h3><table class="mini-table"><tr><th>Serviço</th><th>Quantidade</th></tr>${Object.entries(services).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<tr><td>${escapeHtml(k)}</td><td>${n}</td></tr>`).join("")||`<tr><td colspan="2">Sem dados</td></tr>`}</table></div><div class="card"><h3>💳 Pagamentos</h3><table class="mini-table"><tr><th>Forma</th><th>Quantidade</th></tr>${Object.entries(payments).map(([k,n])=>`<tr><td>${escapeHtml(k)}</td><td>${n}</td></tr>`).join("")||`<tr><td colspan="2">Sem dados</td></tr>`}</table></div><div class="card"><h3>⛔ Motivos de indisponibilidade</h3><table class="mini-table"><tr><th>Motivo</th><th>Registros</th></tr>${Object.entries(reasons).map(([k,n])=>`<tr><td>${escapeHtml(k)}</td><td>${n}</td></tr>`).join("")||`<tr><td colspan="2">Sem bloqueios no período</td></tr>`}</table></div><div class="card"><h3>📈 Ideias de promoção</h3><p class="muted">Use o ranking de procedimentos para comparar Degradê, Corte Social, Barba e outros serviços e planejar campanhas por mês.</p></div></div>`;}
+    document.getElementById("runReport").onclick=run;await run();
+  }
+
   document.querySelectorAll("[data-view]").forEach(card => {
-    card.addEventListener("click",async() => {
-      const view = card.dataset.view;
-      if(view === "barberAgenda") return renderAgenda(false);
-      if(view === "barberServices") return renderBarberServices();
-      if(view === "barberEarnings") return renderEarnings(false);
-      if(view === "barberClients") return renderClientSearch(false);
-      if(view === "barberBlocks") return renderScheduleBlocks(false);
-      if(view === "adminAgenda") return renderAgenda(true);
-      if(view === "adminBarbers") return renderAdminBarbers();
-      if(view === "adminServices") return renderAdminServices();
-      if(view === "adminPackages") return renderAdminPackages();
-      if(view === "adminProducts") return renderAdminProducts();
-      if(view === "adminClients") return renderClientSearch(true);
-      if(view === "adminBlocks") return renderScheduleBlocks(true);
-      if(view === "adminFinance") return renderEarnings(true);
-      if(view === "adminReports") return renderReports();
+    card.addEventListener("click",async()=>{
+      const v=card.dataset.view;
+      if(v==="barberToday") return renderToday(false);
+      if(v==="barberAgenda") return renderAgenda(false);
+      if(v==="barberNewAttendance") return renderNewAttendance(false);
+      if(v==="barberClients") return renderClientsFinal(false);
+      if(v==="barberReturns") return renderReturns(false);
+      if(v==="barberAvailability") return renderAvailability(false);
+      if(v==="barberServices") return renderBarberServices();
+      if(v==="barberEarnings") return renderEarnings(false);
+      if(v==="barberProfile") return renderProfileFinal();
+      if(v==="adminToday") return renderToday(true);
+      if(v==="adminAgenda") return renderAgenda(true);
+      if(v==="adminUsers") return renderAdminUsers();
+      if(v==="adminNewAttendance") return renderNewAttendance(true);
+      if(v==="adminClients") return renderClientsFinal(true);
+      if(v==="adminReturns") return renderReturns(true);
+      if(v==="adminAvailability") return renderAvailability(true);
+      if(v==="adminDecember") return renderDecemberSettings();
+      if(v==="adminServices") return renderAdminServices();
+      if(v==="adminPackages") return renderAdminPackages();
+      if(v==="adminProducts") return renderAdminProducts();
+      if(v==="adminFinance") return renderEarnings(true);
+      if(v==="adminReports") return renderReportsFinal();
     });
   });
 
@@ -1507,25 +1754,14 @@ Gostaria de confirmar meu agendamento.`;
   document.getElementById("closeResetPasswordBtn").addEventListener("click",()=>resetPasswordDialog.close());
 
   document.getElementById("forgotPasswordBtn").addEventListener("click",async()=>{
-    const input = document.getElementById("loginEmail");
-    const email = input.value.trim() || prompt("Digite o e-mail cadastrado:");
-    if(!email) return;
-
-    loginMessage.style.color = "#666";
-    loginMessage.textContent = "Enviando e-mail de recuperação...";
-
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
-    const {error} = await supabase.auth.resetPasswordForEmail(email,{redirectTo});
-
-    if(error){
-      console.error(error);
-      loginMessage.style.color = "#b00020";
-      loginMessage.textContent = "Não foi possível enviar o e-mail. Confira o endereço informado.";
-      return;
-    }
-
-    loginMessage.style.color = "#16803c";
-    loginMessage.textContent = "Enviamos um link de recuperação para o seu e-mail. Confira também a caixa de spam.";
+    const phone=normalizePhone(document.getElementById("loginPhone").value);
+    if(phone.length<10){ loginMessage.style.color="#b00020"; loginMessage.textContent="Digite seu telefone primeiro."; return; }
+    loginMessage.style.color="#666";loginMessage.textContent="Verificando recuperação...";
+    try{
+      const {data,error}=await supabase.functions.invoke("manage-barber-user",{body:{action:"request_recovery",phone}});
+      if(error) throw error;
+      loginMessage.style.color="#16803c";loginMessage.textContent=data?.message||"Se houver e-mail de recuperação cadastrado, enviaremos as instruções.";
+    }catch(e){loginMessage.style.color="#b00020";loginMessage.textContent="Sem e-mail de recuperação? Peça a um administrador para redefinir sua senha.";}
   });
 
   document.getElementById("saveRecoveryPasswordBtn").addEventListener("click",async()=>{
@@ -1577,40 +1813,25 @@ Gostaria de confirmar meu agendamento.`;
     }
   });
 
-  loginSubmit.addEventListener("click",async() => {
-    const email = document.getElementById("loginEmail").value.trim();
-    const password = document.getElementById("loginPassword").value;
-    if(!email || !password){
-      loginMessage.style.color = "#b00020";
-      loginMessage.textContent = "Preencha o e-mail e a senha.";
-      return;
-    }
-    loginSubmit.disabled = true;
-    loginSubmit.textContent = "Entrando...";
-    const { error } = await supabase.auth.signInWithPassword({email,password});
-    if(error){
-      loginMessage.style.color = "#b00020";
-      loginMessage.textContent = "E-mail ou senha incorretos.";
-      loginSubmit.disabled = false;
-      loginSubmit.textContent = "Entrar";
-      return;
-    }
-    try{
-      const profile = await getProfile();
-      if(!profile) throw new Error("Sem perfil");
-      loginMessage.style.color = "#16803c";
-      loginMessage.textContent = "Login realizado com sucesso!";
-      localStorage.setItem("barberstyloRemember",document.getElementById("rememberLogin").checked ? "1" : "0");
-      openRestrictedPanel(profile);
-      loginDialog.close();
-    }catch(error){
-      console.error(error);
-      loginMessage.style.color = "#b00020";
-      loginMessage.textContent = "Usuário autenticado, mas sem perfil de acesso.";
-    }finally{
-      loginSubmit.disabled = false;
-      loginSubmit.textContent = "Entrar";
-    }
+  loginSubmit.addEventListener("click",async()=>{
+    const phone=normalizePhone(document.getElementById("loginPhone").value),password=document.getElementById("loginPassword").value;
+    if(phone.length<10||!password){loginMessage.style.color="#b00020";loginMessage.textContent="Preencha o telefone e a senha.";return}
+    loginSubmit.disabled=true;loginSubmit.textContent="Entrando...";
+    const {error}=await supabase.auth.signInWithPassword({phone:authPhone(phone),password});
+    if(error){loginMessage.style.color="#b00020";loginMessage.textContent="Telefone ou senha incorretos.";loginSubmit.disabled=false;loginSubmit.textContent="Entrar";return}
+    try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember",document.getElementById("rememberLogin").checked?"1":"0");openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
+    catch(error){console.error(error);loginMessage.style.color="#b00020";loginMessage.textContent="Usuário autenticado, mas sem perfil de acesso."}
+    finally{loginSubmit.disabled=false;loginSubmit.textContent="Entrar"}
+  });
+
+  document.querySelectorAll(".cp-eye").forEach(btn=>btn.addEventListener("click",()=>{const i=document.getElementById(btn.dataset.target);i.type=i.type==="password"?"text":"password";btn.textContent=i.type==="password"?"👁️":"🙈"}));
+  document.getElementById("closeChangePasswordBtn").addEventListener("click",()=>document.getElementById("changePasswordDialog").close());
+  document.getElementById("changeNowBtn").addEventListener("click",()=>{document.getElementById("firstAccessDialog").close();document.getElementById("changePasswordDialog").showModal()});
+  document.getElementById("changeLaterBtn").addEventListener("click",()=>document.getElementById("firstAccessDialog").close());
+  document.getElementById("saveChangePasswordBtn").addEventListener("click",async()=>{
+    const current=document.getElementById("currentPassword").value,n1=document.getElementById("newPassword").value,n2=document.getElementById("confirmNewPassword").value,msg=document.getElementById("changePasswordMessage");
+    if(n1.length<6||n1!==n2){msg.style.color="#b00020";msg.textContent=n1!==n2?"As novas senhas não coincidem.":"A nova senha precisa ter pelo menos 6 caracteres.";return}
+    try{const phone=authPhone(currentProfile?.phone||"");if(current){const {error:re}=await supabase.auth.signInWithPassword({phone,password:current});if(re)throw new Error("Senha atual incorreta.")}const {error}=await supabase.auth.updateUser({password:n1});if(error)throw error;try{await supabase.rpc("mark_password_changed")}catch(e){};currentProfile.force_password_change=false;msg.style.color="#16803c";msg.textContent="Senha alterada com sucesso!";setTimeout(()=>document.getElementById("changePasswordDialog").close(),800)}catch(e){msg.style.color="#b00020";msg.textContent=e.message||"Não foi possível alterar a senha."}
   });
 
   document.getElementById("logoutBtn").addEventListener("click",async() => {
@@ -1623,7 +1844,7 @@ Gostaria de confirmar meu agendamento.`;
     panelContent.className = "panel-content";
     panelContent.innerHTML = "";
     document.body.classList.remove("panel-open");
-    document.getElementById("loginEmail").value = "";
+    document.getElementById("loginPhone").value = "";
     document.getElementById("loginPassword").value = "";
     loginMessage.textContent = "";
   });
