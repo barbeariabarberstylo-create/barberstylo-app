@@ -827,8 +827,8 @@ Barbeiro: ${barber.name}
 Serviço: ${service.service_name}
 Valor: ${money(effectivePrice(service,dateInput.value))}${promoApplies(service,dateInput.value) ? " (promoção)" : ""}
 Data: ${weekDayFormatted}, ${formatDate(dateInput.value)}
-Horário: ${selectedSlot}
-Duração: ${service.duration_minutes} minutos
+Horário: ${selectedSlot}${service.duration_visible===false ? "" : `
+Duração: ${service.duration_minutes} minutos`}
 
 Gostaria de confirmar meu agendamento.`;
 
