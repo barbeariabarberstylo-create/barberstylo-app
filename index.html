@@ -336,6 +336,16 @@
         <label>Valor</label>
         <input id="editFinanceAmount" type="number" min="0" step="0.01">
       </div>
+      <div class="full">
+        <label>Procedimento realizado</label>
+        <select id="editFinanceService">
+          <option value="">Carregando procedimentos...</option>
+        </select>
+      </div>
+      <div class="full" id="editFinanceOtherServiceWrap" style="display:none">
+        <label>Outro procedimento</label>
+        <input id="editFinanceOtherService" type="text" placeholder="Digite o procedimento realizado">
+      </div>
     </div>
     <button id="saveFinanceEditBtn" class="btn btn-dark" type="button">💾 Salvar alteração</button>
   </div>
@@ -538,7 +548,8 @@
   }
 
   function serviceOptionText(service){
-    const base = `${service.service_name} • ${money(effectivePrice(service,dateInput.value))} • ${service.duration_minutes} min`;
+    const durationText = service.duration_visible===false ? "" : ` • ${service.duration_minutes} min`;
+    const base = `${service.service_name} • ${money(effectivePrice(service,dateInput.value))}${durationText}`;
     if(promoApplies(service,dateInput.value)) return `${base} • PROMOÇÃO`;
     const promoDays = promoDaysLabel(service);
     return promoDays ? `${base} • Promo ${promoDays}: ${money(service.promotional_price)}` : base;
@@ -564,7 +575,7 @@
     document.getElementById("summaryPrice").textContent = service
       ? `${money(effectivePrice(service,dateInput.value))}${promoApplies(service,dateInput.value) ? " (promoção)" : ""}`
       : "—";
-    document.getElementById("summaryDuration").textContent = service ? `${service.duration_minutes} min` : "—";
+    document.getElementById("summaryDuration").textContent = service ? (service.duration_visible===false ? "A definir" : `${service.duration_minutes} min`) : "—";
     document.getElementById("summaryDate").textContent = formatDate(dateInput.value);
     document.getElementById("summaryTime").textContent = selectedSlot || "—";
   }
@@ -601,7 +612,7 @@
     }
 
     serviceSelect.innerHTML = `<option value="">Carregando serviços...</option>`;
-    const { data, error } = await supabase.rpc("list_barber_services",{
+    const { data, error } = await supabase.rpc("list_barber_services_v2",{
       p_barber_id:Number(barberSelect.value)
     });
 
@@ -867,7 +878,7 @@ Gostaria de confirmar meu agendamento.`;
     };
 
     try{
-      const { data, error } = await supabase.rpc("list_barber_services",{
+      const { data, error } = await supabase.rpc("list_barber_services_v2",{
         p_barber_id:Number(currentProfile.barber_id)
       });
       if(error) throw error;
@@ -893,8 +904,12 @@ Gostaria de confirmar meu agendamento.`;
               <input id="newServicePrice" type="number" min="0" step="0.01" placeholder="0,00">
             </div>
             <div>
-              <label>Duração</label>
-              <input id="newServiceDuration" type="number" min="5" step="5" placeholder="30">
+              <label>Duração (opcional)</label>
+              <input id="newServiceDuration" type="number" min="5" step="5" placeholder="Deixe vazio se ainda não souber">
+              <label style="margin-top:7px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600">
+                <input id="newServiceDurationVisible" type="checkbox" style="width:auto;min-height:auto">
+                Mostrar duração para o cliente
+              </label>
             </div>
             <button id="addMyServiceBtn" class="btn-small btn-light save-service">Adicionar</button>
           </div>
@@ -928,14 +943,16 @@ Gostaria de confirmar meu agendamento.`;
         const name = document.getElementById("newServiceName").value.trim();
         const description = document.getElementById("newServiceDescription").value.trim();
         const price = Number(document.getElementById("newServicePrice").value);
-        const duration = Number(document.getElementById("newServiceDuration").value);
+        const durationRaw = document.getElementById("newServiceDuration").value.trim();
+        const duration = durationRaw==="" ? 30 : Number(durationRaw);
+        const durationVisible = document.getElementById("newServiceDurationVisible").checked && durationRaw!=="";
         const promotionActive = document.getElementById("newPromotionActive").checked;
         const promotionalRaw = document.getElementById("newPromotionalPrice").value;
         const promotionalPrice = promotionalRaw === "" ? null : Number(promotionalRaw);
         const promotionDays = [...document.querySelectorAll(".new-promo-day:checked")].map(el => Number(el.value));
 
-        if(!name || !Number.isFinite(price) || price < 0 || !duration || duration < 5){
-          alert("Preencha nome, preço e duração corretamente.");
+        if(!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(duration) || duration < 5){
+          alert("Preencha nome e preço corretamente. A duração pode ficar oculta até você ter certeza.");
           return;
         }
 
@@ -959,6 +976,13 @@ Gostaria de confirmar meu agendamento.`;
           alert("Não foi possível adicionar o serviço.");
           return;
         }
+
+        try{
+          await supabase.rpc("set_latest_my_service_duration_visibility",{
+            p_service_name:name,
+            p_duration_visible:durationVisible
+          });
+        }catch(e){ console.warn(e); }
 
         await renderBarberServices();
       });
@@ -986,6 +1010,10 @@ Gostaria de confirmar meu agendamento.`;
             <div>
               <label>Duração</label>
               <input class="edit-duration" type="number" min="5" step="5" value="${Number(s.duration_minutes || 30)}">
+              <label style="margin-top:7px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600">
+                <input class="edit-duration-visible" type="checkbox" ${s.duration_visible===false?"":"checked"} style="width:auto;min-height:auto">
+                Mostrar duração para o cliente
+              </label>
             </div>
             <button class="btn-small btn-light save-service">Salvar</button>
           </div>
@@ -1021,6 +1049,7 @@ Gostaria de confirmar meu agendamento.`;
         const descriptionInput = item.querySelector(".edit-description");
         const priceInput = item.querySelector(".edit-price");
         const durationInput = item.querySelector(".edit-duration");
+        const durationVisibleInput = item.querySelector(".edit-duration-visible");
         const promotionActiveInput = item.querySelector(".edit-promotion-active");
         const promotionalPriceInput = item.querySelector(".edit-promotional-price");
 
@@ -1062,7 +1091,17 @@ Gostaria de confirmar meu agendamento.`;
             return;
           }
 
-          alert("Serviço atualizado.");
+          const {error:visibilityError}=await supabase.rpc("set_barber_service_duration_visibility",{
+            p_barber_service_id:Number(s.id),
+            p_duration_visible:durationVisibleInput.checked
+          });
+          if(visibilityError){
+            console.error(visibilityError);
+            alert("O serviço foi salvo, mas não foi possível alterar a exibição da duração.");
+            return;
+          }
+
+          alert(durationVisibleInput.checked ? "Serviço atualizado com duração visível." : "Serviço atualizado. A duração ficou oculta até você decidir exibi-la.");
           await renderBarberServices();
         });
 
@@ -1159,12 +1198,41 @@ Gostaria de confirmar meu agendamento.`;
     dialog.showModal();
   }
 
-  function openFinanceEdit(r){
+  async function openFinanceEdit(r){
     financeEditTarget=r;
     document.getElementById("editFinanceSummary").innerHTML=
       `<strong>${escapeHtml(r.client_name||"Cliente")}</strong><br>${escapeHtml(r.service_name||"Serviço")} • ${escapeHtml(formatDate(r.appointment_date))}`;
     document.getElementById("editFinancePayment").value=r.payment_method||"pending";
     document.getElementById("editFinanceAmount").value=Number(r.amount||0).toFixed(2);
+
+    const serviceSelect=document.getElementById("editFinanceService");
+    const otherWrap=document.getElementById("editFinanceOtherServiceWrap");
+    const otherInput=document.getElementById("editFinanceOtherService");
+    otherWrap.style.display="none";
+    otherInput.value="";
+    serviceSelect.innerHTML=`<option value="">Carregando procedimentos...</option>`;
+
+    try{
+      const {data,error}=await supabase.rpc("list_barber_services_v2",{p_barber_id:Number(r.barber_id)});
+      if(error)throw error;
+      const services=data||[];
+      serviceSelect.innerHTML=services.map(s=>`<option value="${escapeHtml(s.service_name)}">${escapeHtml(s.service_name)}</option>`).join("")+
+        `<option value="__other__">Outro procedimento</option>`;
+      const match=services.find(s=>(s.service_name||"").toLowerCase()===(r.service_name||"").toLowerCase());
+      if(match){
+        serviceSelect.value=match.service_name;
+      }else{
+        serviceSelect.value="__other__";
+        otherWrap.style.display="block";
+        otherInput.value=r.service_name||"";
+      }
+    }catch(e){
+      serviceSelect.innerHTML=`<option value="__other__">Outro procedimento</option>`;
+      serviceSelect.value="__other__";
+      otherWrap.style.display="block";
+      otherInput.value=r.service_name||"";
+    }
+
     document.getElementById("editFinanceDialog").showModal();
   }
 
@@ -1176,16 +1244,28 @@ Gostaria de confirmar meu agendamento.`;
     if(method==="courtesy"||method==="pending") document.getElementById("editFinanceAmount").value="0.00";
   });
 
+  document.getElementById("editFinanceService").addEventListener("change",()=>{
+    document.getElementById("editFinanceOtherServiceWrap").style.display=
+      document.getElementById("editFinanceService").value==="__other__" ? "block" : "none";
+  });
+
   document.getElementById("saveFinanceEditBtn").addEventListener("click",async()=>{
     if(!financeEditTarget)return;
     const method=document.getElementById("editFinancePayment").value;
     const amount=Number(document.getElementById("editFinanceAmount").value||0);
     if(!Number.isFinite(amount)||amount<0){alert("Informe um valor válido.");return}
     try{
-      const {error}=await supabase.rpc("update_financial_payment",{
+      const serviceChoice=document.getElementById("editFinanceService").value;
+      const serviceName=serviceChoice==="__other__"
+        ? document.getElementById("editFinanceOtherService").value.trim()
+        : serviceChoice;
+      if(!serviceName){alert("Informe o procedimento realizado.");return}
+
+      const {error}=await supabase.rpc("update_financial_entry",{
         p_financial_id:Number(financeEditTarget.id),
         p_payment_method:method,
-        p_amount:amount
+        p_amount:amount,
+        p_service_name:serviceName
       });
       if(error)throw error;
       document.getElementById("editFinanceDialog").close();
@@ -1468,12 +1548,15 @@ Gostaria de confirmar meu agendamento.`;
         .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
         .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
 
+      const confirmedFuture=mine
+        .filter(a=>a.appointment_date>=today && ["confirmed","confirmation_sent","in_service"].includes(a.status))
+        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
+
       const todayAppointments=mine
         .filter(a=>a.appointment_date===today && !["cancelled"].includes(a.status))
         .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
 
       const todayConfirmed=todayAppointments.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
-      const todayWaiting=todayAppointments.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
       const todayCompleted=todayAppointments.filter(a=>a.status==="completed");
       const nextToday=todayAppointments
         .filter(a=>!["completed","cancelled","no_show"].includes(a.status))
@@ -1482,33 +1565,33 @@ Gostaria de confirmar meu agendamento.`;
       panelContent.innerHTML=`
         <div class="panel-content-head">
           <div>
-            <h2>Agenda de hoje — ${formatDateWithWeekday(today)}</h2>
-            <p class="muted">Veja os horários de hoje e confirme também os próximos agendamentos.</p>
+            <h2>Agenda — ${formatDateWithWeekday(today)}</h2>
+            <p class="muted">Confirme os próximos horários e acompanhe os que já estão confirmados.</p>
           </div>
           <button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button>
         </div>
 
         <div class="stats-grid">
           <div class="stat"><small>Aguardando confirmação</small><strong>${waitingAll.length}</strong></div>
-          <div class="stat"><small>Confirmados hoje</small><strong>${todayConfirmed.length}</strong></div>
+          <div class="stat"><small>Confirmados próximos</small><strong>${confirmedFuture.length}</strong></div>
           <div class="stat"><small>Realizados hoje</small><strong>${todayCompleted.length}</strong></div>
-          <div class="stat"><small>Próximo atendimento</small><strong style="font-size:18px">${nextToday?(nextToday.start_time||"").slice(0,5)+" • "+escapeHtml(nextToday.client_name):"—"}</strong></div>
+          <div class="stat"><small>Próximo hoje</small><strong style="font-size:18px">${nextToday?(nextToday.start_time||"").slice(0,5)+" • "+escapeHtml(nextToday.client_name):"—"}</strong></div>
         </div>
 
         <div class="card" style="margin-top:16px">
           <h3>🔔 Aguardando confirmação</h3>
-          <p class="muted">Aqui aparecem os agendamentos de hoje e dos próximos dias que ainda precisam ser confirmados.</p>
+          <p class="muted">Hoje e próximos dias.</p>
           <div id="waitingAllList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>✅ Horários confirmados de hoje</h3>
-          <p class="muted">Clientes confirmados que precisam ser atendidos hoje.</p>
-          <div id="todayConfirmedList" class="list"></div>
+          <h3>✅ Agendamentos confirmados</h3>
+          <p class="muted">Depois de confirmar, o cliente continua aqui até o atendimento ser concluído.</p>
+          <div id="confirmedFutureList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>📋 Todos os horários de hoje</h3>
+          <h3>📋 Horários de hoje</h3>
           <div id="todayAllList" class="list"></div>
         </div>`;
 
@@ -1516,9 +1599,9 @@ Gostaria de confirmar meu agendamento.`;
       waitingAll.forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
       if(!waitingAll.length) waitingList.innerHTML=`<div class="empty">Nenhum agendamento aguardando confirmação.</div>`;
 
-      const confirmedList=document.getElementById("todayConfirmedList");
-      todayConfirmed.forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
-      if(!todayConfirmed.length) confirmedList.innerHTML=`<div class="empty">Nenhum horário confirmado para hoje.</div>`;
+      const confirmedList=document.getElementById("confirmedFutureList");
+      confirmedFuture.forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
+      if(!confirmedFuture.length) confirmedList.innerHTML=`<div class="empty">Nenhum agendamento confirmado próximo.</div>`;
 
       const allList=document.getElementById("todayAllList");
       todayAppointments.forEach(a=>allList.appendChild(appointmentItem(a,adminMode)));
@@ -1579,7 +1662,7 @@ Gostaria de confirmar meu agendamento.`;
       const select=document.getElementById("manualService");
       select.innerHTML=`<option value="">Carregando procedimentos...</option>`;
       try{
-        const {data,error}=await supabase.rpc("list_barber_services",{p_barber_id:barberId});
+        const {data,error}=await supabase.rpc("list_barber_services_v2",{p_barber_id:barberId});
         if(error) throw error;
         manualServices=(data||[]).filter(s=>s.active!==false);
         select.innerHTML=`<option value="">Selecione um procedimento</option>`+
