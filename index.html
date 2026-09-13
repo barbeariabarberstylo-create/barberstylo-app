@@ -162,6 +162,18 @@
   .client-metric small{display:block;color:#666}
   .client-metric strong{display:block;margin-top:3px}
 </style>
+
+  <style>
+    @media (max-width: 700px){
+      .day-finish,
+      .finish-service{
+        width:100%;
+        min-height:46px;
+        font-size:15px;
+      }
+    }
+  </style>
+
 </head>
 <body>
 <header>
@@ -522,6 +534,33 @@
   let currentProfile = null;
 
   const money = value => Number(value || 0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+
+  function parseMoneyInput(value){
+    let raw=String(value??"").trim();
+    if(!raw)return NaN;
+
+    raw=raw.replace(/\s/g,"").replace(/^R\$/i,"");
+
+    if(raw.includes(",") && raw.includes(".")){
+      if(raw.lastIndexOf(",") > raw.lastIndexOf(".")){
+        raw=raw.replace(/\./g,"").replace(",",".");
+      }else{
+        raw=raw.replace(/,/g,"");
+      }
+    }else if(raw.includes(",")){
+      raw=raw.replace(",",".");
+    }
+
+    raw=raw.replace(/[^\d.-]/g,"");
+    const n=Number(raw);
+    return Number.isFinite(n)?Math.round(n*100)/100:NaN;
+  }
+
+  function moneyInputValue(value){
+    const n=Number(value||0);
+    return Number.isFinite(n)?n.toFixed(2).replace(".",","):"0,00";
+  }
+
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
   const normalizePhone = value => String(value || "").replace(/\D/g,"").replace(/^55(?=\d{10,11}$)/,"");
   const authEmail = value => `${normalizePhone(value)}@login.barberstylo.com.br`;
@@ -936,7 +975,7 @@ Gostaria de confirmar meu agendamento.`;
             </div>
             <div>
               <label>Preço normal</label>
-              <input id="newServicePrice" type="number" min="0" step="0.01" placeholder="0,00">
+              <input id="newServicePrice" type="text" inputmode="decimal" placeholder="0,00">
             </div>
             <div>
               <label>Duração (opcional)</label>
@@ -962,7 +1001,7 @@ Gostaria de confirmar meu agendamento.`;
             <div style="display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px;align-items:end">
               <div>
                 <label>Preço promocional</label>
-                <input id="newPromotionalPrice" type="number" min="0" step="0.01" placeholder="0,00">
+                <input id="newPromotionalPrice" type="text" inputmode="decimal" placeholder="0,00">
               </div>
               <div>
                 <label>Dias da promoção</label>
@@ -977,13 +1016,13 @@ Gostaria de confirmar meu agendamento.`;
       document.getElementById("addMyServiceBtn").addEventListener("click", async () => {
         const name = document.getElementById("newServiceName").value.trim();
         const description = document.getElementById("newServiceDescription").value.trim();
-        const price = Number(document.getElementById("newServicePrice").value);
+        const price = parseMoneyInput(document.getElementById("newServicePrice").value);
         const durationRaw = document.getElementById("newServiceDuration").value.trim();
         const duration = durationRaw==="" ? 30 : Number(durationRaw);
         const durationVisible = document.getElementById("newServiceDurationVisible").checked && durationRaw!=="";
         const promotionActive = document.getElementById("newPromotionActive").checked;
         const promotionalRaw = document.getElementById("newPromotionalPrice").value;
-        const promotionalPrice = promotionalRaw === "" ? null : Number(promotionalRaw);
+        const promotionalPrice = promotionalRaw.trim() === "" ? null : parseMoneyInput(promotionalRaw);
         const promotionDays = [...document.querySelectorAll(".new-promo-day:checked")].map(el => Number(el.value));
 
         if(!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(duration) || duration < 5){
@@ -996,19 +1035,19 @@ Gostaria de confirmar meu agendamento.`;
           return;
         }
 
-        const { error:addError } = await supabase.rpc("add_my_barber_service",{
+        const { error:addError } = await supabase.rpc("add_my_barber_service_v2",{
           p_name:name,
           p_description:description || null,
           p_price:price,
           p_duration_minutes:duration,
           p_promotion_active:promotionActive,
           p_promotional_price:promotionActive ? promotionalPrice : null,
-          p_promotion_days:promotionActive ? promotionDays : []
+          p_promotion_days_json:promotionActive ? promotionDays : []
         });
 
         if(addError){
           console.error(addError);
-          alert("Não foi possível adicionar o serviço.");
+          alert("Não foi possível adicionar o serviço.\n\n" + (addError.message||"Erro desconhecido."));
           return;
         }
 
@@ -1040,7 +1079,7 @@ Gostaria de confirmar meu agendamento.`;
             </div>
             <div>
               <label>Preço normal</label>
-              <input class="edit-price" type="number" min="0" step="0.01" value="${Number(s.price || 0)}">
+              <input class="edit-price" type="text" inputmode="decimal" value="${moneyInputValue(s.price || 0)}">
             </div>
             <div>
               <label>Duração</label>
@@ -1067,7 +1106,7 @@ Gostaria de confirmar meu agendamento.`;
             <div style="display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px;align-items:end">
               <div>
                 <label>Preço promocional</label>
-                <input class="edit-promotional-price" type="number" min="0" step="0.01" value="${s.promotional_price == null ? "" : Number(s.promotional_price)}" placeholder="0,00">
+                <input class="edit-promotional-price" type="text" inputmode="decimal" value="${s.promotional_price == null ? "" : moneyInputValue(s.promotional_price)}" placeholder="0,00">
               </div>
               <div>
                 <label>Dias da promoção</label>
@@ -1091,11 +1130,11 @@ Gostaria de confirmar meu agendamento.`;
         item.querySelector(".save-service").addEventListener("click", async () => {
           const name = nameInput.value.trim();
           const description = descriptionInput.value.trim();
-          const price = Number(priceInput.value);
+          const price = parseMoneyInput(priceInput.value);
           const duration = Number(durationInput.value);
           const promotionActive = promotionActiveInput.checked;
           const promotionalRaw = promotionalPriceInput.value;
-          const promotionalPrice = promotionalRaw === "" ? null : Number(promotionalRaw);
+          const promotionalPrice = promotionalRaw.trim() === "" ? null : parseMoneyInput(promotionalRaw);
           const promotionDays = [...item.querySelectorAll(`.svc-${s.id}-promo-day:checked`)].map(el => Number(el.value));
 
           if(!name || !Number.isFinite(price) || price < 0 || !duration || duration < 5){
@@ -1108,7 +1147,7 @@ Gostaria de confirmar meu agendamento.`;
             return;
           }
 
-          const { error:updateError } = await supabase.rpc("update_my_barber_service",{
+          const { error:updateError } = await supabase.rpc("update_my_barber_service_v2",{
             p_barber_service_id:Number(s.id),
             p_name:name,
             p_description:description || null,
@@ -1117,12 +1156,12 @@ Gostaria de confirmar meu agendamento.`;
             p_active:true,
             p_promotion_active:promotionActive,
             p_promotional_price:promotionActive ? promotionalPrice : null,
-            p_promotion_days:promotionActive ? promotionDays : []
+            p_promotion_days_json:promotionActive ? promotionDays : []
           });
 
           if(updateError){
             console.error(updateError);
-            alert("Não foi possível salvar as alterações.");
+            alert("Não foi possível salvar as alterações.\n\n" + (updateError.message||"Erro desconhecido."));
             return;
           }
 
@@ -1508,6 +1547,61 @@ Gostaria de confirmar meu agendamento.`;
   }
   function paymentLabel(v){ return ({pix:"Pix",cash:"Dinheiro",debit:"Débito",credit:"Crédito",package:"Pacote",courtesy:"Cortesia",pending:"Pendente",other:"Outro"})[v]||v||"Não informado"; }
   function tagLabel(v){ return ({green:"Verde",yellow:"Amarela",red:"Vermelha",black:"Preta"})[v]||"Sem faixa"; }
+  function applyTagSelectStyle(el){
+    if(!el)return;
+    const styles={
+      "":{bg:"#f3f3f3",fg:"#222",bd:"#d8d8d8"},
+      green:{bg:"#e8f7ec",fg:"#146c2e",bd:"#a9dfb6"},
+      yellow:{bg:"#fff7d6",fg:"#7a5b00",bd:"#ead57c"},
+      red:{bg:"#ffe8e8",fg:"#a31313",bd:"#efb0b0"},
+      black:{bg:"#222",fg:"#fff",bd:"#222"}
+    };
+    const s=styles[el.value||""]||styles[""];
+    el.style.background=s.bg;
+    el.style.color=s.fg;
+    el.style.border=`1px solid ${s.bd}`;
+    el.style.fontWeight="700";
+  }
+
+  function setupReasonSelect(selectEl,inputEl,currentReason){
+    if(!selectEl||!inputEl)return;
+    const known=[
+      "Não informado",
+      "Cliente frequente / VIP",
+      "Faltou",
+      "Cancelou várias vezes",
+      "Atenção no atendimento",
+      "Preferência do cliente",
+      "Pagamento pendente"
+    ];
+    const cur=(currentReason||"").trim();
+    if(!cur){
+      selectEl.value="";
+      inputEl.style.display="none";
+      inputEl.value="";
+    }else if(known.includes(cur)){
+      selectEl.value=cur;
+      inputEl.style.display="none";
+      inputEl.value="";
+    }else{
+      selectEl.value="__outro__";
+      inputEl.style.display="block";
+      inputEl.value=cur;
+    }
+
+    selectEl.addEventListener("change",()=>{
+      const other=selectEl.value==="__outro__";
+      inputEl.style.display=other?"block":"none";
+      if(!other)inputEl.value="";
+    });
+  }
+
+  function readReason(selectEl,inputEl){
+    if(!selectEl)return null;
+    if(selectEl.value==="__outro__") return (inputEl?.value||"").trim()||null;
+    return selectEl.value||null;
+  }
+
   function serviceNameFromAppointment(a){ return a.service_name || a.service_label || `Serviço #${a.service_id||a.barber_service_id||"—"}`; }
   function isPaidAppointment(a){ return a.status==="completed" && !["courtesy","pending"].includes(a.payment_method) && Number(a.amount_paid??a.price_charged??0)>0; }
 
@@ -1628,7 +1722,7 @@ Te esperamos!
         ${!["confirmed","confirmation_sent","completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light confirm-only">✅ Confirmar</button>`:""}
         ${a.status!=="completed"&&a.status!=="cancelled"?`<button class="btn-small btn-light confirm-wa">💬 ${a.confirmation_sent_at?"Abrir WhatsApp novamente":"Confirmar e WhatsApp"}</button>`:""}
         ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light start-service">✂️ Iniciar</button>`:""}
-        ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-light finish-service">💰 Concluir e pagamento</button>`:""}
+        ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-dark finish-service" style="font-weight:800">✅ Concluir atendimento</button>`:""}
         ${a.status!=="cancelled"&&a.status!=="completed"?`<button class="btn-small btn-danger cancel-service">Cancelar e liberar</button><button class="btn-small btn-danger no-show">Não compareceu</button>`:""}
         ${currentProfile?.pix_enabled&&currentProfile?.pix_key?`<button class="btn-small btn-light send-pix">🔑 Enviar Pix</button>`:""}
       </div>`;
@@ -1934,7 +2028,10 @@ Te esperamos!
                 <span class="pill ${statusClass(a.status)}">${escapeHtml(statusText(a.status))}</span>
               </div>
 
-              <div class="action-row" style="margin-top:10px">
+              <div class="action-row" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+                ${["pending","awaiting_confirmation"].includes(a.status)?`<button class="btn-small btn-dark day-confirm" style="font-weight:800">✅ Confirmar horário</button>`:""}
+                ${["confirmed","confirmation_sent","in_service"].includes(a.status)?`<button class="btn-small btn-dark day-finish" style="font-weight:800">✅ Concluir atendimento</button>`:""}
+                ${["confirmed","confirmation_sent"].includes(a.status)?`<button class="btn-small btn-light day-start">✂️ Iniciar atendimento</button>`:""}
                 ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light day-move">🕒 Mudar horário</button>`:""}
                 ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-light day-swap">👤 Trocar cliente</button>`:""}
                 ${!["completed","cancelled"].includes(a.status)?`<button class="btn-small btn-danger day-release">🔓 Liberar horário</button>`:""}
@@ -1959,6 +2056,39 @@ Te esperamos!
                 </div>
               </div>
             `;
+
+            row.querySelector(".day-confirm")?.addEventListener("click",async()=>{
+              try{
+                const {error}=await supabase.rpc("set_appointment_action",{
+                  p_appointment_id:Number(a.id),
+                  p_action:"confirm"
+                });
+                if(error)throw error;
+                alert("Horário confirmado.");
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível confirmar o horário.");
+              }
+            });
+
+            row.querySelector(".day-start")?.addEventListener("click",async()=>{
+              try{
+                const {error}=await supabase.rpc("set_appointment_action",{
+                  p_appointment_id:Number(a.id),
+                  p_action:"start"
+                });
+                if(error)throw error;
+                renderToday(adminMode);
+              }catch(e){
+                console.error(e);
+                alert(e.message||"Não foi possível iniciar o atendimento.");
+              }
+            });
+
+            row.querySelector(".day-finish")?.addEventListener("click",()=>{
+              finalizeAppointment(a);
+            });
 
             row.querySelector(".day-move")?.addEventListener("click",()=>{
               const box=row.querySelector(".day-edit-box");
@@ -2540,18 +2670,29 @@ Te esperamos!
 
                 <label>
                   <strong>Faixa</strong>
-                  <select class="edit-tag" style="width:100%;margin-top:5px">
-                    <option value="" ${!c.tag_color?"selected":""}>Sem faixa</option>
-                    <option value="green" ${c.tag_color==="green"?"selected":""}>Verde</option>
-                    <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>Amarela</option>
-                    <option value="red" ${c.tag_color==="red"?"selected":""}>Vermelha</option>
-                    <option value="black" ${c.tag_color==="black"?"selected":""}>Preta</option>
+                  <select class="edit-tag" style="width:100%;margin-top:5px;padding:10px 12px;border-radius:10px">
+                    <option value="" ${!c.tag_color?"selected":""}>⚪ Sem faixa</option>
+                    <option value="green" ${c.tag_color==="green"?"selected":""}>🟢 Verde</option>
+                    <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>🟡 Amarela</option>
+                    <option value="red" ${c.tag_color==="red"?"selected":""}>🔴 Vermelha</option>
+                    <option value="black" ${c.tag_color==="black"?"selected":""}>⚫ Preta</option>
                   </select>
                 </label>
 
                 <label>
                   <strong>Motivo da faixa</strong>
-                  <input class="edit-reason" value="${escapeHtml(c.tag_reason||"")}" placeholder="Ex.: faltou, VIP, atenção..." style="width:100%;margin-top:5px">
+                  <select class="edit-reason-select" style="width:100%;margin-top:5px;padding:10px 12px;border-radius:10px">
+                    <option value="">Selecione o motivo</option>
+                    <option value="Não informado">Não informado</option>
+                    <option value="Cliente frequente / VIP">Cliente frequente / VIP</option>
+                    <option value="Faltou">Faltou</option>
+                    <option value="Cancelou várias vezes">Cancelou várias vezes</option>
+                    <option value="Atenção no atendimento">Atenção no atendimento</option>
+                    <option value="Preferência do cliente">Preferência do cliente</option>
+                    <option value="Pagamento pendente">Pagamento pendente</option>
+                    <option value="__outro__">Outro motivo</option>
+                  </select>
+                  <input class="edit-reason-other" placeholder="Digite o motivo" style="display:none;width:100%;margin-top:7px">
                 </label>
               </div>
 
@@ -2567,6 +2708,12 @@ Te esperamos!
             </div>`;
 
           const editBox=item.querySelector(".client-inline-edit");
+          const tagSelect=item.querySelector(".edit-tag");
+          const reasonSelect=item.querySelector(".edit-reason-select");
+          const reasonOther=item.querySelector(".edit-reason-other");
+          applyTagSelectStyle(tagSelect);
+          tagSelect?.addEventListener("change",()=>applyTagSelectStyle(tagSelect));
+          setupReasonSelect(reasonSelect,reasonOther,c.tag_reason||"");
 
           item.querySelector(".edit-client").onclick=()=>{
             editBox.style.display=editBox.style.display==="none"?"block":"none";
@@ -2579,7 +2726,10 @@ Te esperamos!
           item.querySelector(".save-client").onclick=async()=>{
             const name=item.querySelector(".edit-name").value.trim();
             const tag=item.querySelector(".edit-tag").value||null;
-            const reason=item.querySelector(".edit-reason").value.trim()||null;
+            const reason=readReason(
+              item.querySelector(".edit-reason-select"),
+              item.querySelector(".edit-reason-other")
+            );
             const notes=item.querySelector(".edit-notes").value.trim()||null;
 
             if(!hasFullName(name)){
@@ -2712,18 +2862,29 @@ Te esperamos!
 
               <label>
                 <strong>Faixa</strong>
-                <select id="clientEditTag" style="width:100%;margin-top:5px">
-                  <option value="" ${!c.tag_color?"selected":""}>Sem faixa</option>
-                  <option value="green" ${c.tag_color==="green"?"selected":""}>Verde</option>
-                  <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>Amarela</option>
-                  <option value="red" ${c.tag_color==="red"?"selected":""}>Vermelha</option>
-                  <option value="black" ${c.tag_color==="black"?"selected":""}>Preta</option>
+                <select id="clientEditTag" style="width:100%;margin-top:5px;padding:10px 12px;border-radius:10px">
+                  <option value="" ${!c.tag_color?"selected":""}>⚪ Sem faixa</option>
+                  <option value="green" ${c.tag_color==="green"?"selected":""}>🟢 Verde</option>
+                  <option value="yellow" ${c.tag_color==="yellow"?"selected":""}>🟡 Amarela</option>
+                  <option value="red" ${c.tag_color==="red"?"selected":""}>🔴 Vermelha</option>
+                  <option value="black" ${c.tag_color==="black"?"selected":""}>⚫ Preta</option>
                 </select>
               </label>
 
               <label>
                 <strong>Motivo da faixa</strong>
-                <input id="clientEditReason" value="${escapeHtml(c.tag_reason||"")}" placeholder="Ex.: faltou, VIP, atenção..." style="width:100%;margin-top:5px">
+                <select id="clientEditReasonSelect" style="width:100%;margin-top:5px;padding:10px 12px;border-radius:10px">
+                  <option value="">Selecione o motivo</option>
+                  <option value="Não informado">Não informado</option>
+                  <option value="Cliente frequente / VIP">Cliente frequente / VIP</option>
+                  <option value="Faltou">Faltou</option>
+                  <option value="Cancelou várias vezes">Cancelou várias vezes</option>
+                  <option value="Atenção no atendimento">Atenção no atendimento</option>
+                  <option value="Preferência do cliente">Preferência do cliente</option>
+                  <option value="Pagamento pendente">Pagamento pendente</option>
+                  <option value="__outro__">Outro motivo</option>
+                </select>
+                <input id="clientEditReasonOther" placeholder="Digite o motivo" style="display:none;width:100%;margin-top:7px">
               </label>
             </div>
 
@@ -2755,6 +2916,13 @@ Te esperamos!
           </div>
           <div id="clientProcedureHistory" style="margin-top:12px"></div>
         </div>`;
+
+      const detailedTagSelect=document.getElementById("clientEditTag");
+      const detailedReasonSelect=document.getElementById("clientEditReasonSelect");
+      const detailedReasonOther=document.getElementById("clientEditReasonOther");
+      applyTagSelectStyle(detailedTagSelect);
+      detailedTagSelect?.addEventListener("change",()=>applyTagSelectStyle(detailedTagSelect));
+      setupReasonSelect(detailedReasonSelect,detailedReasonOther,c.tag_reason||"");
 
       const wrap=document.getElementById("clientProcedureHistory");
 
@@ -2825,7 +2993,10 @@ Te esperamos!
       document.getElementById("saveClientDetails")?.addEventListener("click",async()=>{
         const name=document.getElementById("clientEditName").value.trim();
         const tag=document.getElementById("clientEditTag").value||null;
-        const reason=document.getElementById("clientEditReason").value.trim()||null;
+        const reason=readReason(
+          document.getElementById("clientEditReasonSelect"),
+          document.getElementById("clientEditReasonOther")
+        );
         const notes=document.getElementById("clientEditNotes").value.trim()||null;
 
         if(!hasFullName(name)){
