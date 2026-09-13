@@ -1324,7 +1324,7 @@ Gostaria de confirmar meu agendamento.`;
         <div class="panel-content-head">
           <div>
             <h2>${adminMode?"Financeiro":"Meus resultados"}</h2>
-            <p class="muted">Use os filtros abaixo para ver quanto vendeu no período. Clique no cliente para ver quanto ele já gastou e quantas vezes foi atendido.</p>
+            <p class="muted">Analise por período, procedimento, forma de pagamento e cliente.</p>
           </div>
         </div>
 
@@ -1337,6 +1337,18 @@ Gostaria de confirmar meu agendamento.`;
             <button class="btn btn-light finance-period" data-period="all">Tudo</button>
           </div>
           <div id="financePeriodSummary" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h3>✂️ Funil por procedimento</h3>
+          <p class="muted">Veja quais procedimentos mais venderam no período selecionado.</p>
+          <div id="procedureFunnel"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h3>💳 Funil por forma de pagamento</h3>
+          <p class="muted">Veja quanto entrou por Pix, dinheiro, débito, crédito, pacote e outros.</p>
+          <div id="paymentFunnel"></div>
         </div>
 
         <div class="card" style="overflow:auto">
@@ -1367,6 +1379,46 @@ Gostaria de confirmar meu agendamento.`;
             <div class="stat"><small>Pendentes</small><strong>${m.pendingCount}</strong></div>
             <div class="stat"><small>Cortesias</small><strong>${m.courtesyCount}</strong></div>
           </div>`;
+
+        const procedureMap={};
+        rows.filter(r=>r.entry_status==="paid").forEach(r=>{
+          const key=r.service_name||"Sem procedimento";
+          if(!procedureMap[key]) procedureMap[key]={count:0,total:0};
+          procedureMap[key].count++;
+          procedureMap[key].total+=Number(r.amount||0);
+        });
+        const procedureRows=Object.entries(procedureMap)
+          .sort((a,b)=>b[1].total-a[1].total);
+
+        document.getElementById("procedureFunnel").innerHTML=
+          procedureRows.length
+            ? `<div class="list">${procedureRows.map(([name,v])=>`
+                <div class="list-item">
+                  <strong>${escapeHtml(name)}</strong>
+                  <div class="muted">${v.count} atendimento(s)</div>
+                  <div><strong>${money(v.total)}</strong></div>
+                </div>`).join("")}</div>`
+            : `<div class="empty">Nenhum procedimento pago neste período.</div>`;
+
+        const paymentMap={};
+        rows.filter(r=>r.entry_status==="paid").forEach(r=>{
+          const key=paymentLabel(r.payment_method||"pending");
+          if(!paymentMap[key]) paymentMap[key]={count:0,total:0};
+          paymentMap[key].count++;
+          paymentMap[key].total+=Number(r.amount||0);
+        });
+        const paymentRows=Object.entries(paymentMap)
+          .sort((a,b)=>b[1].total-a[1].total);
+
+        document.getElementById("paymentFunnel").innerHTML=
+          paymentRows.length
+            ? `<div class="list">${paymentRows.map(([name,v])=>`
+                <div class="list-item">
+                  <strong>${escapeHtml(name)}</strong>
+                  <div class="muted">${v.count} pagamento(s)</div>
+                  <div><strong>${money(v.total)}</strong></div>
+                </div>`).join("")}</div>`
+            : `<div class="empty">Nenhum pagamento neste período.</div>`;
 
         document.getElementById("financePeriodTitle").textContent=
           `${financePeriodLabel(financePeriodFilter)} • ${rows.length} lançamento(s)`;
@@ -2102,9 +2154,55 @@ Te esperamos!
   }
 
   async function renderClientTimeline(c){
-    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${escapeHtml(c.full_name||c.name)}</h2><p class="muted">Linha do tempo do cliente.</p></div><button id="backClients" class="btn btn-light">← Voltar</button></div><div id="clientTimeline" class="timeline"><div class="loading">Carregando...</div></div>`;
-    document.getElementById("backClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
-    try{const {data,error}=await supabase.rpc("client_timeline",{p_client_id:c.id});if(error)throw error;const out=document.getElementById("clientTimeline");out.innerHTML=(data||[]).map(x=>`<div class="timeline-item"><strong>${escapeHtml(x.title||x.event_type||"Evento")}</strong><div class="muted">${x.created_at?new Date(x.created_at).toLocaleString("pt-BR"):""}</div><div>${escapeHtml(x.description||"")}</div></div>`).join("")||`<div class="empty">Sem histórico.</div>`;}catch(e){document.getElementById("clientTimeline").innerHTML=`<div class="empty">O histórico detalhado será ativado no SQL final.</div>`}
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="loading">Carregando histórico do cliente...</div>`;
+    try{
+      const {data,error}=await supabase.rpc("get_client_history_summary",{p_client_id:Number(c.id)});
+      if(error)throw error;
+
+      const rows=data?.appointments||[];
+      const summary=data?.summary||{};
+
+      panelContent.innerHTML=`
+        <div class="panel-content-head">
+          <div>
+            <h2>${escapeHtml(c.full_name||"Cliente")}</h2>
+            <p class="muted">Histórico completo de procedimentos, valores e consumo.</p>
+          </div>
+          <button id="backToClients" class="btn btn-light">← Voltar para clientes</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat"><small>Total consumido</small><strong>${money(summary.total_spent||0)}</strong></div>
+          <div class="stat"><small>Atendimentos concluídos</small><strong>${Number(summary.completed_count||0)}</strong></div>
+          <div class="stat"><small>Ticket médio</small><strong>${money(summary.average_ticket||0)}</strong></div>
+          <div class="stat"><small>Último atendimento</small><strong style="font-size:16px">${summary.last_date?escapeHtml(formatDate(summary.last_date)):"—"}</strong></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>✂️ Histórico de procedimentos</h3>
+          <div id="clientProcedureHistory"></div>
+        </div>`;
+
+      const wrap=document.getElementById("clientProcedureHistory");
+      if(!rows.length){
+        wrap.innerHTML=`<div class="empty">Nenhum procedimento concluído para este cliente.</div>`;
+      }else{
+        wrap.innerHTML=`<div class="list">${rows.map(r=>`
+          <div class="list-item">
+            <strong>${escapeHtml(r.service_name||"Procedimento")}</strong>
+            <div class="muted">📅 ${escapeHtml(formatDate(r.appointment_date))} às ${(r.start_time||"").slice(0,5)}</div>
+            <div class="muted">💈 ${escapeHtml(r.barber_name||"—")}</div>
+            <div>Valor cobrado: <strong>${money(r.price_charged||0)}</strong></div>
+            <div>Valor pago: <strong>${money(r.amount_paid||0)}</strong> • ${escapeHtml(paymentLabel(r.payment_method||""))}</div>
+          </div>`).join("")}</div>`;
+      }
+
+      document.getElementById("backToClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
+    }catch(e){
+      console.error(e);
+      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o histórico.</strong><br>${escapeHtml(e?.message||"")}</div>`;
+    }
   }
 
   async function renderReturns(adminMode=false){
