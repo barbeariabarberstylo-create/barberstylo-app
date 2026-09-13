@@ -119,6 +119,14 @@
       main{padding:12px}h1{font-size:39px}.hero{padding:27px 20px}.info-grid,.future-grid{grid-template-columns:1fr}.slots{grid-template-columns:repeat(3,1fr)}
       .panel-shell{padding:22px 12px 90px}.service-edit{grid-template-columns:1fr 1fr}.service-edit .service-name{grid-column:1/-1}.service-edit .save-service{grid-column:1/-1}.form-grid{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}
     }
+
+    .notification-btn{position:relative;border:1px solid #333;background:#111;color:#fff;border-radius:12px;min-height:44px;padding:0 14px;font-weight:700}
+    .notification-badge{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#d60000;color:#fff;font-size:12px;display:none;align-items:center;justify-content:center;border:2px solid #050505}
+    .notification-badge.show{display:flex}
+    .notification-item{border:1px solid #ddd;border-radius:14px;padding:14px;margin-bottom:10px;background:#fff}
+    .notification-item.unread{border-width:2px}
+    .notification-item small{color:#666}
+
   </style>
 </head>
 <body>
@@ -285,6 +293,24 @@
   </div>
 </dialog>
 
+
+<dialog id="notificationsDialog">
+  <div class="login-box" style="width:min(620px,94vw)">
+    <div class="login-head">
+      <div>
+        <div style="font-size:13px;color:#777;font-weight:700">BARBERSTYLO</div>
+        <h2 style="margin:4px 0 0">🔔 Notificações</h2>
+      </div>
+      <button id="closeNotificationsBtn" class="close-round" type="button">×</button>
+    </div>
+    <div class="action-row" style="margin-bottom:14px">
+      <button id="markNotificationsReadBtn" class="btn-small btn-light" type="button">✓ Marcar como vistas</button>
+      <button id="clearNotificationsBtn" class="btn-small btn-danger" type="button">🗑️ Limpar notificações</button>
+    </div>
+    <div id="notificationsList"><div class="loading">Carregando...</div></div>
+  </div>
+</dialog>
+
 <section id="restrictedPanel" class="restricted-panel">
   <div class="panel-header">
     <div class="panel-brand">
@@ -292,6 +318,7 @@
       <div><strong style="font-size:20px">BarberStylo</strong><div id="panelRole" class="panel-role">Área restrita</div></div>
     </div>
     <div class="panel-header-actions">
+      <button id="notificationBtn" class="notification-btn" type="button" title="Notificações">🔔 Notificações <span id="notificationBadge" class="notification-badge">0</span></button>
       <button id="installAppBtn" type="button">📱 Instalar app</button>
       <button id="logoutBtn" class="btn btn-primary">Sair</button>
     </div>
@@ -658,6 +685,7 @@ Gostaria de confirmar meu agendamento.`;
 
   function openRestrictedPanel(profile){
     currentProfile = profile;
+    setTimeout(startNotificationWatch,150);
     if(deferredInstallPrompt) document.getElementById("installAppBtn").style.display = "inline-flex";
     document.body.classList.add("panel-open");
     restrictedPanel.style.display = "block";
@@ -1636,7 +1664,20 @@ Gostaria de confirmar meu agendamento.`;
         <div><label>Valor pago</label><input id="manualPaid" type="number" step="0.01"></div>
         <div><label>Pagamento</label><select id="manualPayment"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="package">Pacote</option><option value="courtesy">Cortesia</option><option value="pending">Pendente</option></select></div>
         <div><label>Faixa do cliente</label><select id="manualTag"><option value="">Sem faixa</option><option value="green">🟢 Verde</option><option value="yellow">🟡 Amarela</option><option value="red">🔴 Vermelha</option></select></div>
-        <div class="full"><label>Motivo da faixa</label><input id="manualTagReason" placeholder="Ex.: cliente fiel e pontual / faltou sem avisar / atenção com pagamentos"></div>
+        <div><label>Motivo da faixa</label><select id="manualTagReasonSelect">
+          <option value="">Selecione o motivo</option>
+          <option value="Cliente fiel e pontual">⭐ Cliente fiel e pontual</option>
+          <option value="Cliente frequente">✅ Cliente frequente</option>
+          <option value="Bom pagador">💰 Bom pagador</option>
+          <option value="Cliente novo">👋 Cliente novo</option>
+          <option value="Atenção com pagamentos">⚠️ Atenção com pagamentos</option>
+          <option value="Faltou sem avisar">🚫 Faltou sem avisar</option>
+          <option value="Atrasos frequentes">⏰ Atrasos frequentes</option>
+          <option value="Comportamento inadequado">❗ Comportamento inadequado</option>
+          <option value="Cliente bloqueado">🔒 Cliente bloqueado</option>
+          <option value="other">Outro motivo</option>
+        </select></div>
+        <div id="manualTagReasonOtherWrap" style="display:none"><label>Outro motivo</label><input id="manualTagReasonOther" placeholder="Digite o motivo"></div>
         <div class="full"><label>Observação</label><textarea id="manualNotes"></textarea></div>
       </div><button id="saveManualAttendance" class="btn btn-dark">Salvar atendimento</button></div>`;
 
@@ -1672,8 +1713,16 @@ Gostaria de confirmar meu agendamento.`;
     });
 
     document.getElementById("manualTag").addEventListener("change",()=>{
-      const reason=document.getElementById("manualTagReason");
-      if(!document.getElementById("manualTag").value) reason.value="";
+      if(!document.getElementById("manualTag").value){
+        document.getElementById("manualTagReasonSelect").value="";
+        document.getElementById("manualTagReasonOther").value="";
+        document.getElementById("manualTagReasonOtherWrap").style.display="none";
+      }
+    });
+
+    document.getElementById("manualTagReasonSelect").addEventListener("change",()=>{
+      document.getElementById("manualTagReasonOtherWrap").style.display=
+        document.getElementById("manualTagReasonSelect").value==="other"?"block":"none";
     });
 
     document.getElementById("saveManualAttendance").onclick=async()=>{
@@ -1690,7 +1739,10 @@ Gostaria de confirmar meu agendamento.`;
       if(!serviceName){alert("Selecione um serviço/procedimento.");return}
 
       const tag=document.getElementById("manualTag").value||null;
-      const tagReason=document.getElementById("manualTagReason").value.trim()||null;
+      const reasonChoice=document.getElementById("manualTagReasonSelect").value;
+      const tagReason=reasonChoice==="other"
+        ? (document.getElementById("manualTagReasonOther").value.trim()||null)
+        : (reasonChoice||null);
 
       const payload={
         barber_id:adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id),
@@ -1771,7 +1823,7 @@ Gostaria de confirmar meu agendamento.`;
   async function renderAdminUsers(){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Usuários e acessos</h2><p class="muted">Login por telefone + senha. E-mail de recuperação é opcional.</p></div></div><div class="list-item"><h3>Cadastrar acesso</h3><div class="form-grid"><div><label>Tipo</label><select id="userRole"><option value="barber">Barbeiro</option><option value="admin">Administrador</option></select></div><div><label>Nome</label><input id="userName"></div><div><label>Telefone / WhatsApp</label><input id="userPhone" placeholder="44999999999"></div><div><label>Senha provisória</label><input id="userPassword" type="password" minlength="6"></div><div class="full"><label>E-mail de recuperação (opcional)</label><input id="userRecoveryEmail" type="email"></div></div><button id="createAccessUser" class="btn btn-dark">Cadastrar usuário</button><div class="note" style="margin-top:10px">No primeiro acesso, o usuário poderá mudar a senha agora ou deixar para depois.</div></div><div id="accessUsersList" class="list" style="margin-top:14px"></div>`;
-    async function reload(){try{const body=await callManageBarberUser({action:"list_users"});const out=document.getElementById("accessUsersList");out.innerHTML=(body.users||[]).map(u=>`<div class="list-item"><strong>${escapeHtml(u.name||"Usuário")}</strong><div class="muted">${u.role==="admin"?"Administrador":"Barbeiro"} • ${escapeHtml(u.phone||"—")}</div><div class="muted">Recuperação: ${escapeHtml(u.recovery_email||"Não informado")}</div><div><span class="pill ${u.active?"green":"red"}">${u.active?"ATIVO":"DESATIVADO"}</span>${u.force_password_change?` <span class="pill">SENHA PROVISÓRIA</span>`:""}</div><div class="action-row"><button class="btn-small btn-light reset-user-pass" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🔑 Nova senha</button><button class="btn-small ${u.active?"btn-danger":"btn-light"} toggle-user" data-id="${u.id}" data-role="${u.role}" data-active="${u.active}">${u.active?"Desativar":"Ativar"}</button><button class="btn-small btn-danger delete-user" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🗑️ Remover acesso</button></div></div>`).join("")||`<div class="empty">Nenhum usuário com acesso cadastrado.</div>`;out.querySelectorAll(".reset-user-pass").forEach(b=>b.onclick=async()=>{const p=prompt(`Crie uma nova senha provisória para ${b.dataset.name} (mínimo 6 caracteres):`);if(!p||p.length<6)return;try{await callManageBarberUser({action:"set_user_password",profile_id:Number(b.dataset.id),role:b.dataset.role,password:p,force_change:true});alert("Nova senha criada. No próximo login o usuário será convidado a criar a senha pessoal.");reload()}catch(e){alert(e.message)}});out.querySelectorAll(".toggle-user").forEach(b=>b.onclick=async()=>{try{await callManageBarberUser({action:"set_user_active",profile_id:Number(b.dataset.id),role:b.dataset.role,active:b.dataset.active!=="true"});reload()}catch(e){alert(e.message)}});out.querySelectorAll(".delete-user").forEach(b=>b.onclick=async()=>{const ok=confirm(`Remover o acesso de ${b.dataset.name}?\n\nSe for barbeiro, os agendamentos e o histórico serão preservados. Ele apenas não conseguirá mais entrar no painel.`);if(!ok)return;try{const r=await callManageBarberUser({action:"delete_user",profile_id:Number(b.dataset.id),role:b.dataset.role});alert(r.message||"Acesso removido.");reload()}catch(e){alert(e.message)}})}catch(e){console.error(e);document.getElementById("accessUsersList").innerHTML=`<div class="empty">Não foi possível carregar os usuários. Atualize a Edge Function manage-barber-user.</div>`}}
+    async function reload(){try{const body=await callManageBarberUser({action:"list_users"});const out=document.getElementById("accessUsersList");out.innerHTML=(body.users||[]).map(u=>`<div class="list-item"><strong>${escapeHtml(u.name||"Usuário")}</strong><div class="muted">${u.role==="admin"?"Administrador":"Barbeiro"} • ${escapeHtml(u.phone||"—")}</div><div class="muted">Recuperação: ${escapeHtml(u.recovery_email||"Não informado")}</div><div><span class="pill ${u.active?"green":"red"}">${u.active?"ATIVO":"DESATIVADO"}</span>${u.force_password_change?` <span class="pill">SENHA PROVISÓRIA</span>`:""}</div><div class="action-row"><button class="btn-small btn-light reset-user-pass" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🔑 Nova senha</button><button class="btn-small ${u.active?"btn-danger":"btn-light"} toggle-user" data-id="${u.id}" data-role="${u.role}" data-active="${u.active}">${u.active?"Desativar":"Ativar"}</button><button class="btn-small btn-danger delete-user" data-id="${u.id}" data-role="${u.role}" data-name="${escapeHtml(u.name||"Usuário")}">🗑️ Remover acesso</button></div></div>`).join("")||`<div class="empty">Nenhum usuário com acesso cadastrado.</div>`;out.querySelectorAll(".reset-user-pass").forEach(b=>b.onclick=async()=>{const p=prompt(`Crie uma nova senha provisória para ${b.dataset.name} (mínimo 6 caracteres):`);if(!p||p.length<6)return;try{await callManageBarberUser({action:"set_user_password",profile_id:b.dataset.id,role:b.dataset.role,password:p,force_change:true});alert("Nova senha criada. No próximo login o usuário será convidado a criar a senha pessoal.");reload()}catch(e){alert(e.message)}});out.querySelectorAll(".toggle-user").forEach(b=>b.onclick=async()=>{try{await callManageBarberUser({action:"set_user_active",profile_id:b.dataset.id,role:b.dataset.role,active:b.dataset.active!=="true"});reload()}catch(e){alert(e.message)}});out.querySelectorAll(".delete-user").forEach(b=>b.onclick=async()=>{const ok=confirm(`Remover o acesso de ${b.dataset.name}?\n\nSe for barbeiro, os agendamentos e o histórico serão preservados. Ele apenas não conseguirá mais entrar no painel.`);if(!ok)return;try{const r=await callManageBarberUser({action:"delete_user",profile_id:b.dataset.id,role:b.dataset.role});alert(r.message||"Acesso removido.");reload()}catch(e){alert(e.message)}})}catch(e){console.error(e);document.getElementById("accessUsersList").innerHTML=`<div class="empty"><strong>Não foi possível carregar os usuários.</strong><br>${escapeHtml(e.message||"Erro desconhecido")}</div>`}}
     document.getElementById("createAccessUser").onclick=async()=>{const body={action:"create_user",role:document.getElementById("userRole").value,name:document.getElementById("userName").value.trim(),phone:normalizePhone(document.getElementById("userPhone").value),password:document.getElementById("userPassword").value,recovery_email:document.getElementById("userRecoveryEmail").value.trim()||null,force_change:true};if(!body.name||body.phone.length<10||body.password.length<6){alert("Preencha nome, telefone e senha com pelo menos 6 caracteres.");return}try{await callManageBarberUser(body);alert("Usuário cadastrado.");reload()}catch(e){alert(e.message)}};await reload();
   }
 
@@ -1928,8 +1980,88 @@ Gostaria de confirmar meu agendamento.`;
     try{const email=authEmail(currentProfile?.phone||"");if(current){const {error:re}=await supabase.auth.signInWithPassword({email,password:current});if(re)throw new Error("Senha atual incorreta.")}const {error}=await supabase.auth.updateUser({password:n1});if(error)throw error;try{await supabase.rpc("mark_password_changed")}catch(e){};currentProfile.force_password_change=false;msg.style.color="#16803c";msg.textContent="Senha alterada com sucesso!";setTimeout(()=>document.getElementById("changePasswordDialog").close(),800)}catch(e){msg.style.color="#b00020";msg.textContent=e.message||"Não foi possível alterar a senha."}
   });
 
+
+  let notificationTimer=null;
+  let lastNotificationId=null;
+
+  function formatNotificationDate(value){
+    try{return new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short",timeZone:"America/Sao_Paulo"}).format(new Date(value))}
+    catch(e){return value||""}
+  }
+
+  async function loadNotifications(showDialog=false){
+    const btn=document.getElementById("notificationBtn");
+    const badge=document.getElementById("notificationBadge");
+    if(!currentProfile || currentProfile.role!=="barber"){
+      if(btn) btn.style.display="none";
+      if(badge) badge.classList.remove("show");
+      return;
+    }
+    if(btn) btn.style.display="inline-flex";
+    try{
+      const {data,error}=await supabase.rpc("list_my_notifications");
+      if(error) throw error;
+      const rows=data||[];
+      const unread=rows.filter(n=>!n.read_at).length;
+      badge.textContent=unread>99?"99+":String(unread);
+      badge.classList.toggle("show",unread>0);
+
+      const newest=rows[0];
+      if(newest && lastNotificationId!==null && String(newest.id)!==String(lastNotificationId) && !newest.read_at){
+        if("Notification" in window && Notification.permission==="granted"){
+          new Notification(newest.title||"BarberStylo",{body:newest.message||"Nova notificação"});
+        }
+      }
+      if(newest) lastNotificationId=newest.id;
+
+      const list=document.getElementById("notificationsList");
+      if(list){
+        list.innerHTML=rows.length?rows.map(n=>`<div class="notification-item ${n.read_at?"":"unread"}">
+          <strong>${escapeHtml(n.title||"Notificação")}</strong>
+          <div style="margin-top:5px">${escapeHtml(n.message||"")}</div>
+          <small>${escapeHtml(formatNotificationDate(n.created_at))}${n.read_at?" • vista":""}</small>
+        </div>`).join(""):`<div class="empty">Nenhuma notificação.</div>`;
+      }
+      if(showDialog){
+        document.getElementById("notificationsDialog").showModal();
+      }
+    }catch(e){
+      console.error("Notificações:",e);
+      const list=document.getElementById("notificationsList");
+      if(list) list.innerHTML=`<div class="empty">Não foi possível carregar as notificações.</div>`;
+    }
+  }
+
+  document.getElementById("notificationBtn").addEventListener("click",async()=>{
+    await loadNotifications(true);
+    try{await supabase.rpc("mark_my_notifications_read")}catch(e){console.error(e)}
+    await loadNotifications(false);
+  });
+  document.getElementById("closeNotificationsBtn").addEventListener("click",()=>document.getElementById("notificationsDialog").close());
+  document.getElementById("markNotificationsReadBtn").addEventListener("click",async()=>{
+    try{await supabase.rpc("mark_my_notifications_read");await loadNotifications(false)}catch(e){alert("Não foi possível marcar as notificações.")}
+  });
+  document.getElementById("clearNotificationsBtn").addEventListener("click",async()=>{
+    if(!confirm("Limpar todas as notificações?"))return;
+    try{await supabase.rpc("clear_my_notifications");await loadNotifications(false)}catch(e){alert("Não foi possível limpar as notificações.")}
+  });
+
+  function startNotificationWatch(){
+    if(notificationTimer) clearInterval(notificationTimer);
+    if(currentProfile?.role==="barber"){
+      loadNotifications(false);
+      notificationTimer=setInterval(()=>loadNotifications(false),20000);
+      if("Notification" in window && Notification.permission==="default"){
+        Notification.requestPermission().catch(()=>{});
+      }
+    }else{
+      document.getElementById("notificationBtn").style.display="none";
+    }
+  }
+
   document.getElementById("logoutBtn").addEventListener("click",async() => {
     await supabase.auth.signOut();
+    if(notificationTimer){clearInterval(notificationTimer);notificationTimer=null;}
     localStorage.removeItem("barberstyloRemember");
     currentProfile = null;
     restrictedPanel.style.display = "none";
