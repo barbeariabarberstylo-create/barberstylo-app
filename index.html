@@ -127,7 +127,19 @@
     .notification-item.unread{border-width:2px}
     .notification-item small{color:#666}
 
-  </style>
+  
+  .agenda-group{margin-top:16px}
+  .agenda-group h3{margin:0 0 8px}
+  .agenda-card{border:1px solid #ddd;border-radius:14px;padding:14px;margin-bottom:10px;background:#fff}
+  .agenda-card-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .agenda-main{min-width:220px}
+  .agenda-meta{font-size:13px;color:#555;margin-top:4px}
+  .agenda-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .compact-btn{padding:9px 12px;border-radius:10px;border:1px solid #ccc;background:#fff;font-weight:700}
+  .compact-btn.danger{border-color:#efc8c8;color:#a40000;background:#fff7f7}
+  .compact-btn.primary{background:#111;color:#fff;border-color:#111}
+  .history-cleaner{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+</style>
 </head>
 <body>
 <header>
@@ -1615,12 +1627,138 @@ Gostaria de confirmar meu agendamento.`;
   }
   async function renderAgenda(adminMode){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${adminMode?"Agenda geral":"Minha agenda"}</h2><p class="muted">Filtre por data e status.</p></div></div>
-    <div class="toolbar"><div><label>Data</label><input id="agendaDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Status</label><select id="agendaStatus"><option value="">Todos</option><option value="pending">Aguardando confirmação</option><option value="confirmed">Confirmados</option><option value="confirmation_sent">Confirmação enviada</option><option value="completed">Realizados</option><option value="cancelled">Cancelados</option><option value="no_show">Não compareceu</option></select></div>${adminMode?`<div><label>Barbeiro</label><select id="agendaBarber"><option value="">Todos</option>${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>`:""}<button id="agendaFilter" class="btn btn-dark">Filtrar</button></div><div id="agendaList" class="list"><div class="loading">Carregando...</div></div>`;
-    async function load(){
-      try{ const all=await fetchAppointments(), date=document.getElementById("agendaDate").value,status=document.getElementById("agendaStatus").value,bid=adminMode?document.getElementById("agendaBarber").value:currentProfile?.barber_id; let v=all.filter(a=>(!date||a.appointment_date===date)&&(!status||(status==="pending"?["pending","awaiting_confirmation"].includes(a.status):a.status===status))&&(!bid||Number(a.barber_id)===Number(bid))); const list=document.getElementById("agendaList");list.innerHTML="";v.forEach(a=>list.appendChild(appointmentItem(a,adminMode)));if(!v.length)list.innerHTML=`<div class="empty">Nenhum agendamento neste filtro.</div>`;}catch(e){console.error(e)}
+    panelContent.innerHTML=`<div class="loading">Carregando agenda...</div>`;
+    try{
+      const appointments=await fetchAppointments();
+      const mine=appointments.filter(a=>adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id));
+      const today=new Date().toISOString().slice(0,10);
+
+      const future=mine.filter(a=>a.appointment_date>=today && !["completed","cancelled","no_show"].includes(a.status));
+      const finished=mine.filter(a=>["completed","cancelled","no_show"].includes(a.status));
+
+      panelContent.innerHTML=`
+        <div class="panel-content-head">
+          <div>
+            <h2>${adminMode?"Agenda geral":"Minha agenda"}</h2>
+            <p class="muted">Organizada por próximos atendimentos e histórico.</p>
+          </div>
+        </div>
+
+        <div class="history-cleaner">
+          <button id="showUpcomingBtn" class="btn btn-dark">📅 Próximos</button>
+          <button id="showHistoryBtn" class="btn btn-light">🗂️ Histórico</button>
+          <button id="clearHistoryBtn" class="btn btn-danger">🧹 Limpar histórico visual</button>
+        </div>
+
+        <div id="agendaUpcoming" class="agenda-group">
+          <h3>Próximos atendimentos</h3>
+          <div id="agendaUpcomingList"></div>
+        </div>
+
+        <div id="agendaHistory" class="agenda-group" style="display:none">
+          <h3>Histórico</h3>
+          <p class="muted">Concluídos, cancelados e faltas.</p>
+          <div id="agendaHistoryList"></div>
+        </div>`;
+
+      function renderCompact(list,targetId){
+        const target=document.getElementById(targetId);
+        target.innerHTML="";
+        if(!list.length){
+          target.innerHTML=`<div class="empty">Nenhum registro.</div>`;
+          return;
+        }
+        list
+          .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`))
+          .forEach(a=>{
+            const card=document.createElement("div");
+            card.className="agenda-card";
+            const statusText=statusLabel(a.status);
+            const actions=[];
+
+            if(["pending","awaiting_confirmation"].includes(a.status)){
+              actions.push(`<button class="compact-btn primary act-confirm" data-id="${a.id}">✅ Confirmar</button>`);
+              actions.push(`<button class="compact-btn act-confirm-wa" data-id="${a.id}">💬 Confirmar e WhatsApp</button>`);
+            }
+            if(["confirmed","confirmation_sent"].includes(a.status)){
+              actions.push(`<button class="compact-btn primary act-start" data-id="${a.id}">✂️ Iniciar</button>`);
+              actions.push(`<button class="compact-btn act-finish" data-id="${a.id}">💰 Concluir</button>`);
+            }
+            if(a.status==="in_service"){
+              actions.push(`<button class="compact-btn primary act-finish" data-id="${a.id}">💰 Concluir e pagamento</button>`);
+            }
+            if(!["completed","cancelled","no_show"].includes(a.status)){
+              actions.push(`<button class="compact-btn danger act-cancel" data-id="${a.id}">Cancelar</button>`);
+              actions.push(`<button class="compact-btn danger act-noshow" data-id="${a.id}">Não compareceu</button>`);
+            }
+
+            card.innerHTML=`
+              <div class="agenda-card-top">
+                <div class="agenda-main">
+                  <strong>${escapeHtml(a.client_name||"Cliente")}</strong>
+                  <div class="agenda-meta">📅 ${escapeHtml(formatDateWithWeekday(a.appointment_date))} às ${(a.start_time||"").slice(0,5)}</div>
+                  <div class="agenda-meta">✂️ ${escapeHtml(serviceNameFromAppointment(a))}</div>
+                  <div class="agenda-meta">📱 ${escapeHtml(a.client_phone||"—")} • ${statusText}</div>
+                </div>
+                <div><strong>${money(a.price_charged||0)}</strong></div>
+              </div>
+              <div class="agenda-actions">${actions.join("")}</div>`;
+
+            target.appendChild(card);
+          });
+
+        target.querySelectorAll(".act-confirm").forEach(b=>b.onclick=async()=>{
+          const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(b.dataset.id),p_action:"confirm"});
+          if(error){alert("Não foi possível confirmar.");return}
+          renderAgenda(adminMode);
+        });
+        target.querySelectorAll(".act-confirm-wa").forEach(b=>b.onclick=()=>{
+          const a=mine.find(x=>String(x.id)===String(b.dataset.id)); if(a)openClientWhatsapp(a,"confirmation");
+        });
+        target.querySelectorAll(".act-start").forEach(b=>b.onclick=async()=>{
+          const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(b.dataset.id),p_action:"start"});
+          if(error){alert("Não foi possível iniciar.");return}
+          renderAgenda(adminMode);
+        });
+        target.querySelectorAll(".act-finish").forEach(b=>b.onclick=()=>{
+          const a=mine.find(x=>String(x.id)===String(b.dataset.id)); if(a)finalizeAppointment(a);
+        });
+        target.querySelectorAll(".act-cancel").forEach(b=>b.onclick=async()=>{
+          if(!confirm("Cancelar este horário?"))return;
+          const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(b.dataset.id),p_action:"cancel"});
+          if(error){alert("Não foi possível cancelar.");return}
+          renderAgenda(adminMode);
+        });
+        target.querySelectorAll(".act-noshow").forEach(b=>b.onclick=async()=>{
+          if(!confirm("Marcar como não compareceu?"))return;
+          const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(b.dataset.id),p_action:"no_show"});
+          if(error){alert("Não foi possível registrar.");return}
+          renderAgenda(adminMode);
+        });
+      }
+
+      renderCompact(future,"agendaUpcomingList");
+      renderCompact(finished,"agendaHistoryList");
+
+      document.getElementById("showUpcomingBtn").onclick=()=>{
+        document.getElementById("agendaUpcoming").style.display="";
+        document.getElementById("agendaHistory").style.display="none";
+      };
+      document.getElementById("showHistoryBtn").onclick=()=>{
+        document.getElementById("agendaUpcoming").style.display="none";
+        document.getElementById("agendaHistory").style.display="";
+      };
+      document.getElementById("clearHistoryBtn").onclick=async()=>{
+        if(!confirm("Limpar o histórico visual da agenda?\n\nIsso não apaga financeiro nem cadastro de clientes."))return;
+        const {error}=await supabase.rpc("clear_my_agenda_history");
+        if(error){alert(error.message||"Não foi possível limpar.");return}
+        alert("Histórico visual limpo.");
+        renderAgenda(adminMode);
+      };
+    }catch(e){
+      console.error(e);
+      panelContent.innerHTML=`<div class="empty">Não foi possível carregar a agenda.</div>`;
     }
-    document.getElementById("agendaFilter").onclick=load; await load();
   }
 
   async function renderNewAttendance(adminMode=false){
@@ -1775,9 +1913,67 @@ Gostaria de confirmar meu agendamento.`;
 
   async function renderReturns(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Retornos</h2><p class="muted">Clientes para chamar novamente.</p></div></div><div class="toolbar"><div><label>Prazo</label><select id="returnDays"><option value="7">7 dias</option><option value="15" selected>15 dias</option><option value="20">20 dias</option><option value="30">30 dias</option></select></div><button id="returnReload" class="btn btn-dark">Atualizar</button></div><div id="returnsList" class="list"></div>`;
-    async function load(){const days=Number(document.getElementById("returnDays").value);const today=new Date().toISOString().slice(0,10);try{let all=await fetchAppointments();all=all.filter(a=>a.status==="completed"&&(adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id)));const latest={};all.forEach(a=>{const k=normalizePhone(a.client_phone);if(!latest[k]||a.appointment_date>latest[k].appointment_date)latest[k]=a});const due=Object.values(latest).filter(a=>daysBetween(a.appointment_date,today)>=days);const out=document.getElementById("returnsList");out.innerHTML="";due.forEach(a=>{const d=document.createElement("div");d.className="list-item";const elapsed=daysBetween(a.appointment_date,today);d.innerHTML=`<strong>${escapeHtml(a.client_name)}</strong><div>Último atendimento: ${formatDateWithWeekday(a.appointment_date)}</div><div class="muted">${elapsed} dias sem vir • ${serviceNameFromAppointment(a)}</div><button class="btn btn-dark wa-return">💬 Chamar no WhatsApp</button>`;d.querySelector(".wa-return").onclick=()=>openClientWhatsapp(a,"return");out.appendChild(d)});if(!due.length)out.innerHTML=`<div class="empty">Nenhum cliente para retorno neste prazo.</div>`;}catch(e){console.error(e)}}
-    document.getElementById("returnReload").onclick=load;await load();
+    panelContent.innerHTML=`<div class="loading">Carregando retornos...</div>`;
+    try{
+      const {data,error}=await supabase.rpc("list_due_returns",{p_days:30});
+      if(error)throw error;
+      const rows=data||[];
+
+      panelContent.innerHTML=`
+        <div class="panel-content-head">
+          <div>
+            <h2>Retornos</h2>
+            <p class="muted">Confirme se o cliente já retornou ou abra o WhatsApp para chamar novamente.</p>
+          </div>
+        </div>
+        <div id="returnsList" class="list"></div>`;
+
+      const list=document.getElementById("returnsList");
+      if(!rows.length){
+        list.innerHTML=`<div class="empty">Nenhum retorno pendente.</div>`;
+        return;
+      }
+
+      rows.forEach(r=>{
+        const item=document.createElement("div");
+        item.className="list-item";
+        item.innerHTML=`
+          <strong>${escapeHtml(r.client_name||"Cliente")}</strong>
+          <div class="muted">📱 ${escapeHtml(r.client_phone||"—")}</div>
+          <div class="muted">Último atendimento: ${escapeHtml(formatDate(r.last_appointment_date))}</div>
+          <div class="muted">Retorno sugerido: ${escapeHtml(formatDate(r.return_date))}</div>
+          <div class="action-row">
+            <button class="btn-small btn-light return-wa">💬 Chamar no WhatsApp</button>
+            <button class="btn-small btn-light return-confirm">✅ Confirmar retorno</button>
+            <button class="btn-small btn-danger return-dismiss">Remover da lista</button>
+          </div>`;
+
+        item.querySelector(".return-wa").onclick=()=>{
+          const phone=phoneForWhatsapp(r.client_phone);
+          const text=`Olá, ${r.client_name||"cliente"}! 💈✂️\nJá está na época do seu retorno na BarberStylo. Quer reservar seu próximo horário?`;
+          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
+        };
+
+        item.querySelector(".return-confirm").onclick=async()=>{
+          const {error}=await supabase.rpc("confirm_client_return",{p_client_id:Number(r.client_id)});
+          if(error){alert(error.message||"Não foi possível confirmar o retorno.");return}
+          alert("Retorno confirmado.");
+          renderReturns(adminMode);
+        };
+
+        item.querySelector(".return-dismiss").onclick=async()=>{
+          if(!confirm("Remover este retorno da lista?"))return;
+          const {error}=await supabase.rpc("dismiss_client_return",{p_client_id:Number(r.client_id)});
+          if(error){alert(error.message||"Não foi possível remover.");return}
+          renderReturns(adminMode);
+        };
+
+        list.appendChild(item);
+      });
+    }catch(e){
+      console.error(e);
+      panelContent.innerHTML=`<div class="empty">Não foi possível carregar os retornos.</div>`;
+    }
   }
 
   async function renderAvailability(adminMode=false){
