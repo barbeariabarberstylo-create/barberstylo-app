@@ -151,6 +151,16 @@
   .return-adjust input{width:auto;min-height:38px;padding:7px 10px}
   .return-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
   .return-summary .stat{min-height:92px}
+
+  .client-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .client-tabs button{border:1px solid #ccc;background:#fff;border-radius:12px;padding:10px 13px;font-weight:700;cursor:pointer}
+  .client-tabs button.active{background:#111;color:#fff;border-color:#111}
+  .client-card{border:1px solid #ddd;border-radius:16px;padding:16px;background:#fff;margin-bottom:12px}
+  .client-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .client-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+  .client-metric{background:#f7f7f7;border-radius:12px;padding:10px}
+  .client-metric small{display:block;color:#666}
+  .client-metric strong{display:block;margin-top:3px}
 </style>
 </head>
 <body>
@@ -174,7 +184,7 @@
   <section class="info-grid">
     <div class="card"><h3>📍 Onde estamos</h3><p>Av. Cuiabá, 1193<br>Jd. Esperança<br><strong>Sarandi, Paraná</strong></p></div>
     <div class="card"><h3>🕘 Atendimento</h3><p>Segunda a sábado<br>9h às 20h</p><p><strong>Domingo:</strong> sob disponibilidade.</p></div>
-    <div class="card"><h3>📸 Instagram</h3><p>Acompanhe nossos cortes e trabalhos.</p><p><a href="https://www.instagram.com/barbeariabarberstylo/" target="_blank" rel="noopener"><strong>@barbeariabarberstylo</strong></a></p></div>
+    <div class="card"><h3>📸 Instagram</h3><p>Acompanhe nossos cortes e trabalhos.</p><p><a href="https://www.instagram.com/barberstylo/" target="_blank" rel="noopener"><strong>@barberstylo</strong></a></p></div>
   </section>
 
   <section id="agendamento">
@@ -238,7 +248,7 @@
   </section>
 </main>
 
-<footer>© BarberStylo • Av. Cuiabá, 1193 - Jd. Esperança • Sarandi, Paraná • Instagram: @barbeariabarberstylo</footer>
+<footer>© BarberStylo • Av. Cuiabá, 1193 - Jd. Esperança • Sarandi, Paraná • Instagram: @barberstylo</footer>
 
 <nav class="bottom-nav">
   <button onclick="document.getElementById('inicio').scrollIntoView({behavior:'smooth'})"><span>⌂</span><small>Início</small></button>
@@ -1905,19 +1915,171 @@ Gostaria de confirmar meu agendamento.`;
 
   async function renderClientsFinal(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="panel-content-head"><div><h2>Clientes</h2><p class="muted">Busque por nome ou WhatsApp. Edite faixa, observações, bloqueio e histórico.</p></div></div><div class="search-row"><div><label>Pesquisar</label><input id="clientSearchFinal" placeholder="Nome ou WhatsApp"></div><button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button></div><div id="clientFinalList" class="list" style="margin-top:14px"></div>`;
+    let activeFilter="all";
+
+    panelContent.innerHTML=`
+      <div class="panel-content-head">
+        <div>
+          <h2>👥 Clientes</h2>
+          <p class="muted">Pesquise por nome ou WhatsApp e acompanhe o histórico de cada cliente.</p>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <div>
+          <label>Pesquisar cliente</label>
+          <input id="clientSearchFinal" placeholder="Ex.: Jovanna ou 44998077518">
+        </div>
+        <button id="clientSearchBtnFinal" class="btn btn-dark">Pesquisar</button>
+      </div>
+
+      <div class="client-tabs">
+        <button class="active client-filter" data-filter="all">Todos</button>
+        <button class="client-filter" data-filter="attempted">Tentaram agendar</button>
+        <button class="client-filter" data-filter="waiting">Aguardando confirmação</button>
+        <button class="client-filter" data-filter="confirmed">Confirmados</button>
+        <button class="client-filter" data-filter="completed">Atendidos</button>
+        <button class="client-filter" data-filter="no_show">Não compareceram</button>
+        <button class="client-filter" data-filter="cancelled">Cancelados</button>
+      </div>
+
+      <div id="clientFinalList" style="margin-top:14px"></div>`;
+
+    const list=document.getElementById("clientFinalList");
+    const input=document.getElementById("clientSearchFinal");
+
     async function run(){
-      const q=document.getElementById("clientSearchFinal").value.trim(); const list=document.getElementById("clientFinalList"); list.innerHTML=`<div class="loading">Buscando...</div>`;
-      try{const {data,error}=await supabase.rpc("search_clients_full",{p_query:q});if(error)throw error;list.innerHTML="";(data||[]).forEach(c=>{const item=document.createElement("div");item.className="list-item";item.innerHTML=`<strong><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||c.name||"Cliente")}</strong><div class="muted">WhatsApp: ${escapeHtml(c.phone||"—")}</div><div>${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'} <span class="pill">${tagLabel(c.tag_color)}</span></div><div class="muted"><strong>Motivo da faixa:</strong> ${escapeHtml(c.tag_reason||"Não informado")}</div><div class="muted">Atendimentos: ${c.appointment_count||0} • Total pago: ${money(c.total_paid||0)} • Faltas: ${c.no_show_count||0}</div><div class="muted">Observação: ${escapeHtml(c.notes||"—")}</div><div class="action-row"><button class="btn-small btn-light edit-client">Editar</button><button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button><button class="btn-small btn-light history-client">Histórico</button>${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}</div>`;
-      item.querySelector(".edit-client").onclick=async()=>{const name=prompt("Nome e sobrenome:",c.full_name||c.name||"");if(name===null)return;if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}const notes=prompt("Observações:",c.notes||"");const tag=prompt("Faixa: green, yellow, red ou deixe vazio para sem faixa",c.tag_color||"");if(tag!==null&&!["","green","yellow","red"].includes(tag.trim().toLowerCase())){alert("Use green, yellow, red ou deixe vazio.");return}const tagReason=prompt("Motivo da faixa (por que este cliente recebeu essa faixa?):",c.tag_reason||"");try{const {error}=await supabase.rpc("update_client_profile",{p_client_id:c.id,p_full_name:name,p_phone:c.phone,p_tag_color:(tag||"").trim().toLowerCase()||null,p_notes:notes||null,p_tag_reason:tagReason||null});if(error)throw error;run()}catch(e){alert(e.message||"Não foi possível atualizar o cliente.")}};
-      item.querySelector(".block-client").onclick=async()=>{try{const {error}=await supabase.rpc("set_client_blocked",{p_client_id:c.id,p_blocked:!c.blocked});if(error)throw error;run()}catch(e){alert("Falta habilitar bloqueio no banco.")}};
-      item.querySelector(".history-client").onclick=()=>renderClientTimeline(c);
-      item.querySelector(".archive-client")?.addEventListener("click",async()=>{if(!confirm("Arquivar este cliente? O histórico será preservado."))return;try{const {error}=await supabase.rpc("archive_client",{p_client_id:c.id});if(error)throw error;run()}catch(e){alert("Falta habilitar arquivamento no banco.")}});
-      item.querySelector(".delete-client")?.addEventListener("click",async()=>{if(!confirm("EXCLUIR DEFINITIVAMENTE este cliente? Essa ação pode remover o cadastro e não poderá ser desfeita."))return;const again=prompt('Digite EXCLUIR para confirmar:');if(again!=="EXCLUIR")return;try{const {error}=await supabase.rpc("delete_client_permanently",{p_client_id:c.id});if(error)throw error;run()}catch(e){alert("A exclusão definitiva será habilitada no SQL final.")}});
-      list.appendChild(item)});if(!(data||[]).length)list.innerHTML=`<div class="empty">Nenhum cliente encontrado.</div>`;}catch(e){console.error(e);list.innerHTML=`<div class="empty">A tela de clientes está pronta. Vamos ativar as novas funções no SQL final.</div>`}
+      const q=input.value.trim();
+      list.innerHTML=`<div class="loading">Carregando clientes...</div>`;
+
+      try{
+        const {data,error}=await supabase.rpc("search_clients_dashboard",{
+          p_query:q,
+          p_filter:activeFilter
+        });
+        if(error)throw error;
+
+        const rows=data||[];
+        list.innerHTML="";
+
+        if(!rows.length){
+          list.innerHTML=`<div class="empty">Nenhum cliente encontrado neste filtro.</div>`;
+          return;
+        }
+
+        rows.forEach(c=>{
+          const item=document.createElement("div");
+          item.className="client-card";
+          item.innerHTML=`
+            <div class="client-card-head">
+              <div>
+                <strong style="font-size:18px"><span class="tag-dot tag-${c.tag_color||"none"}"></span>${escapeHtml(c.full_name||"Cliente")}</strong>
+                <div class="muted">📱 ${escapeHtml(c.phone||"—")}</div>
+                <div style="margin-top:7px">
+                  ${c.blocked?'<span class="pill red">BLOQUEADO</span>':'<span class="pill green">ATIVO</span>'}
+                  <span class="pill">${tagLabel(c.tag_color)}</span>
+                </div>
+              </div>
+              <div class="muted">Último status: <strong>${escapeHtml(statusLabel(c.last_status||"")||"—")}</strong></div>
+            </div>
+
+            <div class="client-metrics">
+              <div class="client-metric"><small>Agendamentos</small><strong>${Number(c.appointment_count||0)}</strong></div>
+              <div class="client-metric"><small>Atendidos</small><strong>${Number(c.completed_count||0)}</strong></div>
+              <div class="client-metric"><small>Faltas</small><strong>${Number(c.no_show_count||0)}</strong></div>
+              <div class="client-metric"><small>Cancelados</small><strong>${Number(c.cancelled_count||0)}</strong></div>
+              <div class="client-metric"><small>Total gasto</small><strong>${money(c.total_paid||0)}</strong></div>
+              <div class="client-metric"><small>Último agendamento</small><strong>${c.last_appointment_date?escapeHtml(formatDate(c.last_appointment_date)):"—"}</strong></div>
+            </div>
+
+            <div class="muted"><strong>Motivo da faixa:</strong> ${escapeHtml(c.tag_reason||"Não informado")}</div>
+            <div class="muted"><strong>Observação:</strong> ${escapeHtml(c.notes||"—")}</div>
+
+            <div class="action-row" style="margin-top:12px">
+              <button class="btn-small btn-light edit-client">✏️ Editar</button>
+              <button class="btn-small ${c.blocked?'btn-light':'btn-danger'} block-client">${c.blocked?'Desbloquear':'Bloquear'}</button>
+              <button class="btn-small btn-light history-client">🗂️ Histórico completo</button>
+              ${c.phone?`<button class="btn-small btn-light whatsapp-client">💬 WhatsApp</button>`:""}
+              ${adminMode?`<button class="btn-small btn-danger archive-client">Arquivar</button><button class="btn-small btn-danger delete-client">Excluir definitivamente</button>`:""}
+            </div>`;
+
+          item.querySelector(".edit-client").onclick=async()=>{
+            const name=prompt("Nome e sobrenome:",c.full_name||"");
+            if(name===null)return;
+            if(!hasFullName(name)){alert("Informe nome e sobrenome.");return}
+            const notes=prompt("Observações:",c.notes||"");
+            const tag=prompt("Faixa: green, yellow, red ou vazio",c.tag_color||"");
+            if(tag!==null&&!["","green","yellow","red"].includes(tag.trim().toLowerCase())){
+              alert("Use green, yellow, red ou deixe vazio.");return;
+            }
+            const tagReason=prompt("Motivo da faixa:",c.tag_reason||"");
+            try{
+              const {error}=await supabase.rpc("update_client_profile",{
+                p_client_id:c.id,
+                p_full_name:name,
+                p_phone:c.phone,
+                p_tag_color:(tag||"").trim().toLowerCase()||null,
+                p_notes:notes||null,
+                p_tag_reason:tagReason||null
+              });
+              if(error)throw error;
+              run();
+            }catch(e){alert(e.message||"Não foi possível atualizar o cliente.")}
+          };
+
+          item.querySelector(".block-client").onclick=async()=>{
+            try{
+              const {error}=await supabase.rpc("set_client_blocked",{p_client_id:c.id,p_blocked:!c.blocked});
+              if(error)throw error;
+              run();
+            }catch(e){alert(e.message||"Não foi possível alterar o bloqueio.")}
+          };
+
+          item.querySelector(".history-client").onclick=()=>renderClientTimeline(c);
+          item.querySelector(".whatsapp-client")?.addEventListener("click",()=>window.open(`https://wa.me/${phoneForWhatsapp(c.phone)}`,"_blank"));
+
+          item.querySelector(".archive-client")?.addEventListener("click",async()=>{
+            if(!confirm("Arquivar este cliente? O histórico será preservado."))return;
+            try{
+              const {error}=await supabase.rpc("archive_client",{p_client_id:c.id});
+              if(error)throw error;
+              run();
+            }catch(e){alert(e.message||"Não foi possível arquivar.")}
+          });
+
+          item.querySelector(".delete-client")?.addEventListener("click",async()=>{
+            if(!confirm("EXCLUIR DEFINITIVAMENTE este cliente?"))return;
+            const again=prompt('Digite EXCLUIR para confirmar:');
+            if(again!=="EXCLUIR")return;
+            try{
+              const {error}=await supabase.rpc("delete_client_permanently",{p_client_id:c.id});
+              if(error)throw error;
+              run();
+            }catch(e){alert(e.message||"Não foi possível excluir.")}
+          });
+
+          list.appendChild(item);
+        });
+      }catch(e){
+        console.error(e);
+        list.innerHTML=`<div class="empty"><strong>Não foi possível carregar os clientes.</strong><br>${escapeHtml(e?.message||"")}</div>`;
+      }
     }
+
     document.getElementById("clientSearchBtnFinal").onclick=run;
+    input.addEventListener("keydown",e=>{if(e.key==="Enter")run()});
+
+    document.querySelectorAll(".client-filter").forEach(btn=>{
+      btn.onclick=()=>{
+        activeFilter=btn.dataset.filter;
+        document.querySelectorAll(".client-filter").forEach(b=>b.classList.toggle("active",b===btn));
+        run();
+      };
+    });
+
+    await run();
   }
+
   async function renderClientTimeline(c){
     panelContent.innerHTML=`<div class="panel-content-head"><div><h2>${escapeHtml(c.full_name||c.name)}</h2><p class="muted">Linha do tempo do cliente.</p></div><button id="backClients" class="btn btn-light">← Voltar</button></div><div id="clientTimeline" class="timeline"><div class="loading">Carregando...</div></div>`;
     document.getElementById("backClients").onclick=()=>renderClientsFinal(currentProfile?.role==="admin");
