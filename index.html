@@ -531,8 +531,7 @@
       persistSession:true,
       autoRefreshToken:true,
       detectSessionInUrl:true,
-      storage:window.localStorage,
-      storageKey:"barberstylo-auth"
+      storage:window.localStorage
     }
   });
 
@@ -551,6 +550,43 @@
   const panelContent = document.getElementById("panelContent");
   const panelRole = document.getElementById("panelRole");
   const panelWelcome = document.getElementById("panelWelcome");
+
+
+  async function migrateLegacySavedSession(){
+    try{
+      const raw=localStorage.getItem("barberstylo-auth");
+      if(!raw)return false;
+
+      const parsed=JSON.parse(raw);
+      const candidate=
+        parsed?.currentSession ||
+        parsed?.session ||
+        parsed;
+
+      const accessToken=
+        candidate?.access_token ||
+        candidate?.accessToken;
+
+      const refreshToken=
+        candidate?.refresh_token ||
+        candidate?.refreshToken;
+
+      if(!accessToken || !refreshToken)return false;
+
+      const {data,error}=await supabase.auth.setSession({
+        access_token:accessToken,
+        refresh_token:refreshToken
+      });
+
+      if(error || !data?.session)return false;
+
+      localStorage.setItem("barberstyloRemember","1");
+      return true;
+    }catch(error){
+      console.warn("Não foi possível migrar sessão antiga:",error);
+      return false;
+    }
+  }
 
   let barbers = [];
   let barberServices = [];
@@ -851,8 +887,7 @@ Barbeiro: ${barber.name}
 Serviço: ${service.service_name}
 Valor: ${money(effectivePrice(service,dateInput.value))}${promoApplies(service,dateInput.value) ? " (promoção)" : ""}
 Data: ${weekDayFormatted}, ${formatDate(dateInput.value)}
-Horário: ${selectedSlot}${service.duration_visible===false ? "" : `
-Duração: ${service.duration_minutes} minutos`}
+Horário: ${selectedSlot}
 
 Gostaria de confirmar meu agendamento.`;
 
@@ -3515,7 +3550,7 @@ Te esperamos!
     loginSubmit.disabled=true;loginSubmit.textContent="Entrando...";
     const {error}=await supabase.auth.signInWithPassword({email:authEmail(phone),password});
     if(error){loginMessage.style.color="#b00020";loginMessage.textContent="Telefone ou senha incorretos.";loginSubmit.disabled=false;loginSubmit.textContent="Entrar";return}
-    try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember","1");openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
+    try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember","1");try{supabase.auth.startAutoRefresh()}catch(e){};openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
     catch(error){console.error(error);loginMessage.style.color="#b00020";loginMessage.textContent="Usuário autenticado, mas sem perfil de acesso."}
     finally{loginSubmit.disabled=false;loginSubmit.textContent="Entrar"}
   });
@@ -3660,32 +3695,54 @@ Te esperamos!
   });
 
   if("serviceWorker" in navigator){
-    window.addEventListener("load",() => {
-      navigator.serviceWorker.register("./service-worker.js")
-        .catch(error => console.error("Erro ao registrar o aplicativo:",error));
+    window.addEventListener("load",async() => {
+      try{
+        const registration=await navigator.serviceWorker.register("./service-worker.js?v=6",{
+          updateViaCache:"none"
+        });
+        await registration.update();
+      }catch(error){
+        console.error("Erro ao registrar o aplicativo:",error);
+      }
     });
   }
 
   let restoringSession=false;
+  let initialAuthResolved=false;
+
+  async function getValidSession(){
+    let {data:{session},error}=await supabase.auth.getSession();
+    if(error) console.warn("getSession:",error);
+
+    if(!session){
+      const migrated=await migrateLegacySavedSession();
+      if(migrated){
+        ({data:{session}}=await supabase.auth.getSession());
+      }
+    }
+
+    if(!session)return null;
+
+    // Renova o token antes de abrir o painel.
+    try{
+      const refreshed=await supabase.auth.refreshSession();
+      if(refreshed?.data?.session){
+        session=refreshed.data.session;
+      }
+    }catch(error){
+      console.warn("refreshSession:",error);
+    }
+
+    return session;
+  }
 
   async function restoreSavedSession(){
-    if(restoringSession)return false;
+    if(restoringSession)return Boolean(currentProfile);
     restoringSession=true;
 
     try{
-      const {data:{session},error}=await supabase.auth.getSession();
-      if(error) throw error;
-
-      if(!session){
-        return false;
-      }
-
-      // Mantém a sessão renovada quando o PWA volta do segundo plano.
-      try{
-        await supabase.auth.refreshSession();
-      }catch(e){
-        console.warn("Não foi necessário renovar a sessão:",e);
-      }
+      const session=await getValidSession();
+      if(!session)return false;
 
       const profile=await getProfile();
       if(!profile)return false;
@@ -3711,45 +3768,68 @@ Te esperamos!
     const startup=document.getElementById("appStartup");
 
     try{
-      // Primeiro verifica a sessão. Assim quem já está logado não vê
-      // a página pública de clientes antes do painel do barbeiro.
+      // Mantém a sessão ativa no PWA.
+      try{ supabase.auth.startAutoRefresh(); }catch(e){}
+
+      // Primeiro tenta entrar no painel salvo.
       const restored=await restoreSavedSession();
+      initialAuthResolved=true;
 
       await loadBarbers();
 
+      // Só monta a área pública se realmente não houver sessão.
       if(!restored){
         await renderPublicCatalog();
       }
     }catch(error){
       console.error("Erro ao iniciar o aplicativo:",error);
+      initialAuthResolved=true;
       try{
         await loadBarbers();
-        await renderPublicCatalog();
+        const {data:{session}}=await supabase.auth.getSession();
+        if(!session){
+          await renderPublicCatalog();
+        }
       }catch(e){}
     }finally{
       if(startup) startup.remove();
     }
   }
 
-  // Quando o aplicativo é minimizado e aberto de novo, restaura o painel
-  // sem pedir telefone e senha novamente.
-  document.addEventListener("visibilitychange",async()=>{
-    if(document.visibilityState==="visible"){
-      const {data:{session}}=await supabase.auth.getSession();
-      if(session && !currentProfile){
-        await restoreSavedSession();
-      }else if(session){
-        // Renova silenciosamente o token quando necessário.
-        supabase.auth.refreshSession().catch(()=>{});
+  async function resumeAppSession(){
+    try{
+      try{ supabase.auth.startAutoRefresh(); }catch(e){}
+
+      const session=await getValidSession();
+
+      if(session){
+        if(!currentProfile){
+          await restoreSavedSession();
+        }else{
+          // Se já está logado, apenas garante que o painel permaneça aberto.
+          restrictedPanel.style.display="block";
+          document.body.classList.add("panel-open");
+        }
       }
+    }catch(error){
+      console.warn("Falha ao retomar sessão:",error);
+    }
+  }
+
+  // Ao voltar do segundo plano/minimizado, nunca manda o barbeiro
+  // novamente para a tela pública enquanto a sessão ainda existir.
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible"){
+      resumeAppSession();
     }
   });
 
-  window.addEventListener("pageshow",async()=>{
-    const {data:{session}}=await supabase.auth.getSession();
-    if(session && !currentProfile){
-      await restoreSavedSession();
-    }
+  window.addEventListener("pageshow",()=>{
+    resumeAppSession();
+  });
+
+  window.addEventListener("focus",()=>{
+    resumeAppSession();
   });
 
   init();
