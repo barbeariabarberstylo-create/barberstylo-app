@@ -3285,7 +3285,7 @@ Te esperamos!
           <div class="panel-content-head">
             <div>
               <h2>🕒 Disponibilidade</h2>
-              <p class="muted">Organize cada dia e veja rapidamente o que está livre, bloqueado ou ocupado.</p>
+              <p class="muted">Organize cada dia e escolha também o intervalo entre os horários de agendamento.</p>
             </div>
           </div>
 
@@ -3304,6 +3304,18 @@ Te esperamos!
               </div>
               <div><label>Começo</label><input id="availabilityStart" type="time" value="${String(day.start_time||"09:00").slice(0,5)}"></div>
               <div><label>Fim</label><input id="availabilityEnd" type="time" value="${String(day.end_time||"20:00").slice(0,5)}"></div>
+              <div>
+                <label>Espaçamento dos horários</label>
+                <select id="availabilitySlotInterval">
+                  <option value="10" ${Number(day.slot_interval_minutes||30)===10?"selected":""}>De 10 em 10 minutos</option>
+                  <option value="15" ${Number(day.slot_interval_minutes||30)===15?"selected":""}>De 15 em 15 minutos</option>
+                  <option value="20" ${Number(day.slot_interval_minutes||30)===20?"selected":""}>De 20 em 20 minutos</option>
+                  <option value="30" ${Number(day.slot_interval_minutes||30)===30?"selected":""}>De 30 em 30 minutos</option>
+                  <option value="45" ${Number(day.slot_interval_minutes||30)===45?"selected":""}>De 45 em 45 minutos</option>
+                  <option value="60" ${Number(day.slot_interval_minutes||30)===60?"selected":""}>De 1 em 1 hora</option>
+                </select>
+                <div class="muted" style="font-size:12px;margin-top:5px">Define de quanto em quanto tempo aparecem opções para agendamento.</div>
+              </div>
               <div>
                 <label>Motivo</label>
                 <select id="availabilityReason">
@@ -3326,7 +3338,7 @@ Te esperamos!
           </div>
 
           <div class="card" style="margin-top:16px">
-            <h3>📅 Horários de ${formatDateWithWeekday(selectedDate)}</h3>
+            <h3>📅 Horários de ${formatDateWithWeekday(selectedDate)}</h3><div class="muted" style="margin-bottom:8px">Espaçamento atual: <strong>${Number(day.slot_interval_minutes||30)} minutos</strong></div>
             <p class="muted">Clique em um horário disponível para bloquear. Clique em um bloqueado para liberar. Ocupados não podem ser alterados.</p>
             <div id="availabilitySlots" class="slots"></div>
             <div class="note" style="margin-top:12px"><strong>Legenda:</strong> ✅ disponível • 🚫 bloqueado • 👤 ocupado</div>
@@ -3368,7 +3380,9 @@ Te esperamos!
           const mode=document.getElementById("availabilityDayMode").value;
           const start=document.getElementById("availabilityStart").value||"09:00";
           const end=document.getElementById("availabilityEnd").value||"20:00";
+          const slotInterval=Number(document.getElementById("availabilitySlotInterval").value||30);
           if(mode!=="off" && start>=end){alert("O horário final precisa ser depois do horário inicial.");return}
+          if(![10,15,20,30,45,60].includes(slotInterval)){alert("Escolha um espaçamento válido.");return}
 
           const {error}=await supabase.rpc("save_barber_day_availability",{
             p_barber_id:barberId,
@@ -3377,7 +3391,8 @@ Te esperamos!
             p_start_time:start,
             p_end_time:end,
             p_reason:document.getElementById("availabilityReason").value||null,
-            p_notes:document.getElementById("availabilityNotes").value.trim()||null
+            p_notes:document.getElementById("availabilityNotes").value.trim()||null,
+            p_slot_interval_minutes:slotInterval
           });
           if(error){alert(error.message||"Não foi possível salvar.");return}
           alert("Disponibilidade atualizada.");
