@@ -139,6 +139,18 @@
   .compact-btn.danger{border-color:#efc8c8;color:#a40000;background:#fff7f7}
   .compact-btn.primary{background:#111;color:#fff;border-color:#111}
   .history-cleaner{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+
+  .return-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px}
+  .return-card{border:1px solid #ddd;border-radius:16px;padding:16px;background:#fff;margin-bottom:12px}
+  .return-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .return-status{display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}
+  .return-status.overdue{background:#fee2e2;color:#991b1b}
+  .return-status.today{background:#fef3c7;color:#92400e}
+  .return-status.future{background:#dcfce7;color:#166534}
+  .return-adjust{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .return-adjust input{width:auto;min-height:38px;padding:7px 10px}
+  .return-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+  .return-summary .stat{min-height:92px}
 </style>
 </head>
 <body>
@@ -1914,66 +1926,141 @@ Gostaria de confirmar meu agendamento.`;
   async function renderReturns(adminMode=false){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="loading">Carregando retornos...</div>`;
-    try{
-      const {data,error}=await supabase.rpc("list_due_returns",{p_days:30});
-      if(error)throw error;
-      const rows=data||[];
+    let horizon=30;
 
-      panelContent.innerHTML=`
-        <div class="panel-content-head">
-          <div>
-            <h2>Retornos</h2>
-            <p class="muted">Confirme se o cliente já retornou ou abra o WhatsApp para chamar novamente.</p>
+    async function load(){
+      try{
+        const {data,error}=await supabase.rpc("list_returns_dashboard",{p_horizon_days:horizon});
+        if(error)throw error;
+        const rows=data||[];
+        const today=new Date(); today.setHours(12,0,0,0);
+
+        const overdue=rows.filter(r=>Number(r.days_until_return)<0).length;
+        const dueToday=rows.filter(r=>Number(r.days_until_return)===0).length;
+        const next7=rows.filter(r=>Number(r.days_until_return)>0 && Number(r.days_until_return)<=7).length;
+
+        panelContent.innerHTML=`
+          <div class="panel-content-head">
+            <div>
+              <h2>🔁 Retornos</h2>
+              <p class="muted">Veja quem está na hora de voltar, ajuste a data e chame pelo WhatsApp.</p>
+            </div>
           </div>
-        </div>
-        <div id="returnsList" class="list"></div>`;
 
-      const list=document.getElementById("returnsList");
-      if(!rows.length){
-        list.innerHTML=`<div class="empty">Nenhum retorno pendente.</div>`;
-        return;
+          <div class="return-summary">
+            <div class="stat"><small>Atrasados</small><strong>${overdue}</strong></div>
+            <div class="stat"><small>Para hoje</small><strong>${dueToday}</strong></div>
+            <div class="stat"><small>Próximos 7 dias</small><strong>${next7}</strong></div>
+            <div class="stat"><small>Total na lista</small><strong>${rows.length}</strong></div>
+          </div>
+
+          <div class="card">
+            <h3>🔎 Mostrar retornos até</h3>
+            <div class="return-toolbar">
+              ${[7,15,20,30,60,90].map(d=>`<button class="btn ${horizon===d?"btn-dark":"btn-light"} return-horizon" data-days="${d}">${d} dias</button>`).join("")}
+            </div>
+            <p class="muted">Esse filtro só muda o que você está vendo. Para alterar a data de um cliente, use “Ajustar retorno” no cartão dele.</p>
+          </div>
+
+          <div id="returnsList" style="margin-top:16px"></div>`;
+
+        const list=document.getElementById("returnsList");
+        if(!rows.length){
+          list.innerHTML=`<div class="empty">Nenhum retorno pendente neste período.</div>`;
+        }else{
+          rows.forEach(r=>{
+            const days=Number(r.days_until_return);
+            const statusClass=days<0?"overdue":days===0?"today":"future";
+            const statusText=days<0
+              ? `Atrasado ${Math.abs(days)} dia${Math.abs(days)===1?"":"s"}`
+              : days===0 ? "Retorno hoje" : `Em ${days} dia${days===1?"":"s"}`;
+
+            const card=document.createElement("div");
+            card.className="return-card";
+            card.innerHTML=`
+              <div class="return-card-head">
+                <div>
+                  <strong style="font-size:18px">${escapeHtml(r.client_name||"Cliente")}</strong>
+                  <div class="muted" style="margin-top:4px">📱 ${escapeHtml(r.client_phone||"—")}</div>
+                  <div class="muted">✂️ ${escapeHtml(r.service_name||"Procedimento")}</div>
+                  <div class="muted">Último atendimento: ${escapeHtml(formatDate(r.last_appointment_date))}</div>
+                  <div class="muted">Retorno programado: <strong>${escapeHtml(formatDate(r.return_date))}</strong></div>
+                </div>
+                <span class="return-status ${statusClass}">${statusText}</span>
+              </div>
+
+              <div class="action-row" style="margin-top:12px">
+                <button class="btn-small btn-light return-wa">💬 WhatsApp</button>
+                <button class="btn-small btn-light return-confirm">✅ Confirmar retorno</button>
+                <button class="btn-small btn-danger return-dismiss">Remover da lista</button>
+              </div>
+
+              <div class="return-adjust">
+                <strong style="font-size:13px">Ajustar retorno:</strong>
+                ${[7,15,20,30].map(d=>`<button class="btn-small btn-light quick-return" data-days="${d}">+${d} dias</button>`).join("")}
+                <input class="custom-return-date" type="date" value="${r.return_date||""}">
+                <button class="btn-small btn-light save-return-date">Salvar data</button>
+              </div>`;
+
+            card.querySelector(".return-wa").onclick=()=>{
+              const phone=phoneForWhatsapp(r.client_phone);
+              const text=`Olá, ${r.client_name||"cliente"}! 💈✂️\nEstá chegando a hora do seu retorno na BarberStylo. Seu último atendimento foi em ${formatDate(r.last_appointment_date)}.\n\nQuer reservar seu próximo horário?`;
+              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
+            };
+
+            card.querySelector(".return-confirm").onclick=async()=>{
+              if(!confirm(`Confirmar que ${r.client_name} retornou?`))return;
+              const {error}=await supabase.rpc("confirm_client_return",{p_client_id:Number(r.client_id)});
+              if(error){alert(error.message||"Não foi possível confirmar.");return}
+              alert("Retorno confirmado e retirado da lista.");
+              load();
+            };
+
+            card.querySelector(".return-dismiss").onclick=async()=>{
+              if(!confirm("Remover este retorno da lista sem marcar como realizado?"))return;
+              const {error}=await supabase.rpc("dismiss_client_return",{p_client_id:Number(r.client_id)});
+              if(error){alert(error.message||"Não foi possível remover.");return}
+              load();
+            };
+
+            card.querySelectorAll(".quick-return").forEach(btn=>btn.onclick=async()=>{
+              const days=Number(btn.dataset.days);
+              const newDate=addDays(r.last_appointment_date,days);
+              const {error}=await supabase.rpc("set_client_return_date",{
+                p_client_id:Number(r.client_id),
+                p_return_date:newDate
+              });
+              if(error){alert(error.message||"Não foi possível ajustar.");return}
+              load();
+            });
+
+            card.querySelector(".save-return-date").onclick=async()=>{
+              const value=card.querySelector(".custom-return-date").value;
+              if(!value){alert("Escolha uma data.");return}
+              const {error}=await supabase.rpc("set_client_return_date",{
+                p_client_id:Number(r.client_id),
+                p_return_date:value
+              });
+              if(error){alert(error.message||"Não foi possível salvar a data.");return}
+              alert("Data do retorno atualizada.");
+              load();
+            };
+
+            list.appendChild(card);
+          });
+        }
+
+        document.querySelectorAll(".return-horizon").forEach(btn=>btn.onclick=()=>{
+          horizon=Number(btn.dataset.days);
+          load();
+        });
+      }catch(e){
+        console.error(e);
+        panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar os retornos.</strong><br>${escapeHtml(e?.message||"")}</div>`;
       }
-
-      rows.forEach(r=>{
-        const item=document.createElement("div");
-        item.className="list-item";
-        item.innerHTML=`
-          <strong>${escapeHtml(r.client_name||"Cliente")}</strong>
-          <div class="muted">📱 ${escapeHtml(r.client_phone||"—")}</div>
-          <div class="muted">Último atendimento: ${escapeHtml(formatDate(r.last_appointment_date))}</div>
-          <div class="muted">Retorno sugerido: ${escapeHtml(formatDate(r.return_date))}</div>
-          <div class="action-row">
-            <button class="btn-small btn-light return-wa">💬 Chamar no WhatsApp</button>
-            <button class="btn-small btn-light return-confirm">✅ Confirmar retorno</button>
-            <button class="btn-small btn-danger return-dismiss">Remover da lista</button>
-          </div>`;
-
-        item.querySelector(".return-wa").onclick=()=>{
-          const phone=phoneForWhatsapp(r.client_phone);
-          const text=`Olá, ${r.client_name||"cliente"}! 💈✂️\nJá está na época do seu retorno na BarberStylo. Quer reservar seu próximo horário?`;
-          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
-        };
-
-        item.querySelector(".return-confirm").onclick=async()=>{
-          const {error}=await supabase.rpc("confirm_client_return",{p_client_id:Number(r.client_id)});
-          if(error){alert(error.message||"Não foi possível confirmar o retorno.");return}
-          alert("Retorno confirmado.");
-          renderReturns(adminMode);
-        };
-
-        item.querySelector(".return-dismiss").onclick=async()=>{
-          if(!confirm("Remover este retorno da lista?"))return;
-          const {error}=await supabase.rpc("dismiss_client_return",{p_client_id:Number(r.client_id)});
-          if(error){alert(error.message||"Não foi possível remover.");return}
-          renderReturns(adminMode);
-        };
-
-        list.appendChild(item);
-      });
-    }catch(e){
-      console.error(e);
-      panelContent.innerHTML=`<div class="empty">Não foi possível carregar os retornos.</div>`;
     }
+
+    await load();
   }
 
   async function renderAvailability(adminMode=false){
