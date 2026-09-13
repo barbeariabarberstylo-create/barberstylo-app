@@ -176,6 +176,22 @@
 
 </head>
 <body>
+<div id="appStartup" style="
+  position:fixed;
+  inset:0;
+  z-index:5000;
+  background:#f4f4f4;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+">
+  <div style="text-align:center">
+    <img src="logo.png" alt="BarberStylo" style="width:92px;height:92px;object-fit:contain;background:#000;border-radius:50%;margin-bottom:14px">
+    <div style="font-size:21px;font-weight:800">BarberStylo</div>
+    <div style="margin-top:7px;color:#666">Abrindo seu painel...</div>
+  </div>
+</div>
 <header>
   <div class="brand">
     <img src="logo.png" alt="Barbearia BarberStylo">
@@ -285,7 +301,7 @@
       <input id="loginPassword" type="password" placeholder="Digite sua senha">
       <button id="togglePasswordBtn" class="password-toggle" type="button" aria-label="Mostrar ou ocultar senha">👁️</button>
     </div>
-    <label class="check-line"><input id="rememberLogin" type="checkbox" checked>Manter-me conectado neste aparelho</label>
+    <label class="check-line"><input id="rememberLogin" type="checkbox" checked disabled>Manter-me conectado neste aparelho</label>
     <button id="loginSubmit" class="login-submit">Entrar</button>
     <button id="forgotPasswordBtn" type="button" style="width:100%;border:0;background:transparent;padding:14px 0 0;color:#333;font-weight:700">Esqueci minha senha</button>
     <div id="loginMessage"></div>
@@ -510,7 +526,15 @@
 
   const SUPABASE_URL = "https://tsokcgxjpdgewdqbpoae.supabase.co";
   const SUPABASE_KEY = "sb_publishable_5bMOEvfugnbsbo0sos-HJA_5qpGTn8-";
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY,{
+    auth:{
+      persistSession:true,
+      autoRefreshToken:true,
+      detectSessionInUrl:true,
+      storage:window.localStorage,
+      storageKey:"barberstylo-auth"
+    }
+  });
 
   const barberSelect = document.getElementById("barberSelect");
   const serviceSelect = document.getElementById("serviceSelect");
@@ -3470,12 +3494,18 @@ Te esperamos!
     },900);
   });
 
-  supabase.auth.onAuthStateChange((event)=>{
+  supabase.auth.onAuthStateChange((event,session)=>{
     if(event === "PASSWORD_RECOVERY"){
       setTimeout(()=>{
         try{ if(loginDialog.open) loginDialog.close(); }catch(e){}
         resetPasswordDialog.showModal();
       },100);
+      return;
+    }
+
+    if((event==="SIGNED_IN" || event==="TOKEN_REFRESHED") && session){
+      // A sessão permanece válida mesmo se o app for minimizado.
+      localStorage.setItem("barberstyloRemember","1");
     }
   });
 
@@ -3485,7 +3515,7 @@ Te esperamos!
     loginSubmit.disabled=true;loginSubmit.textContent="Entrando...";
     const {error}=await supabase.auth.signInWithPassword({email:authEmail(phone),password});
     if(error){loginMessage.style.color="#b00020";loginMessage.textContent="Telefone ou senha incorretos.";loginSubmit.disabled=false;loginSubmit.textContent="Entrar";return}
-    try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember",document.getElementById("rememberLogin").checked?"1":"0");openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
+    try{const profile=await getProfile();if(!profile)throw new Error("Sem perfil");loginMessage.style.color="#16803c";loginMessage.textContent="Login realizado com sucesso!";localStorage.setItem("barberstyloRemember","1");openRestrictedPanel(profile);loginDialog.close();if(profile.force_password_change) setTimeout(()=>document.getElementById("firstAccessDialog").showModal(),250);}
     catch(error){console.error(error);loginMessage.style.color="#b00020";loginMessage.textContent="Usuário autenticado, mas sem perfil de acesso."}
     finally{loginSubmit.disabled=false;loginSubmit.textContent="Entrar"}
   });
@@ -3636,26 +3666,92 @@ Te esperamos!
     });
   }
 
-  async function init(){
-    await loadBarbers();
-    await renderPublicCatalog();
-    const { data:{session} } = await supabase.auth.getSession();
-    if(session){
-      const remember = localStorage.getItem("barberstyloRemember");
-      if(remember === "1"){
-        try{
-          const profile = await getProfile();
-          if(profile){
-            currentProfile = profile;
-            if(deferredInstallPrompt) installAppBtn.style.display = "inline-flex";
-            openRestrictedPanel(profile);
-          }
-        }catch(error){ console.error(error); }
-      }else{
-        await supabase.auth.signOut();
+  let restoringSession=false;
+
+  async function restoreSavedSession(){
+    if(restoringSession)return false;
+    restoringSession=true;
+
+    try{
+      const {data:{session},error}=await supabase.auth.getSession();
+      if(error) throw error;
+
+      if(!session){
+        return false;
       }
+
+      // Mantém a sessão renovada quando o PWA volta do segundo plano.
+      try{
+        await supabase.auth.refreshSession();
+      }catch(e){
+        console.warn("Não foi necessário renovar a sessão:",e);
+      }
+
+      const profile=await getProfile();
+      if(!profile)return false;
+
+      localStorage.setItem("barberstyloRemember","1");
+      currentProfile=profile;
+
+      if(deferredInstallPrompt){
+        installAppBtn.style.display="inline-flex";
+      }
+
+      openRestrictedPanel(profile);
+      return true;
+    }catch(error){
+      console.error("Erro ao restaurar sessão:",error);
+      return false;
+    }finally{
+      restoringSession=false;
     }
   }
+
+  async function init(){
+    const startup=document.getElementById("appStartup");
+
+    try{
+      // Primeiro verifica a sessão. Assim quem já está logado não vê
+      // a página pública de clientes antes do painel do barbeiro.
+      const restored=await restoreSavedSession();
+
+      await loadBarbers();
+
+      if(!restored){
+        await renderPublicCatalog();
+      }
+    }catch(error){
+      console.error("Erro ao iniciar o aplicativo:",error);
+      try{
+        await loadBarbers();
+        await renderPublicCatalog();
+      }catch(e){}
+    }finally{
+      if(startup) startup.remove();
+    }
+  }
+
+  // Quando o aplicativo é minimizado e aberto de novo, restaura o painel
+  // sem pedir telefone e senha novamente.
+  document.addEventListener("visibilitychange",async()=>{
+    if(document.visibilityState==="visible"){
+      const {data:{session}}=await supabase.auth.getSession();
+      if(session && !currentProfile){
+        await restoreSavedSession();
+      }else if(session){
+        // Renova silenciosamente o token quando necessário.
+        supabase.auth.refreshSession().catch(()=>{});
+      }
+    }
+  });
+
+  window.addEventListener("pageshow",async()=>{
+    const {data:{session}}=await supabase.auth.getSession();
+    if(session && !currentProfile){
+      await restoreSavedSession();
+    }
+  });
+
   init();
 </script>
 </body>
