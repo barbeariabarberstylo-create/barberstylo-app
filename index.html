@@ -1456,25 +1456,25 @@ Gostaria de confirmar meu agendamento.`;
 
   async function renderToday(adminMode=false){
     panelContent.className="panel-content active";
-    panelContent.innerHTML=`<div class="loading">Carregando agenda de hoje...</div>`;
+    panelContent.innerHTML=`<div class="loading">Carregando agenda...</div>`;
 
     try{
       const all=await fetchAppointments();
-      const today=new Date().toISOString().slice(0,10);
+      const now=new Date();
+      const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
       const mine=all.filter(a=>adminMode||Number(a.barber_id)===Number(currentProfile?.barber_id));
+
+      const waitingAll=mine
+        .filter(a=>a.appointment_date>=today && ["pending","awaiting_confirmation"].includes(a.status))
+        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
 
       const todayAppointments=mine
         .filter(a=>a.appointment_date===today && !["cancelled"].includes(a.status))
         .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""));
 
-      const todayWaiting=todayAppointments.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
       const todayConfirmed=todayAppointments.filter(a=>["confirmed","confirmation_sent","in_service"].includes(a.status));
+      const todayWaiting=todayAppointments.filter(a=>["pending","awaiting_confirmation"].includes(a.status));
       const todayCompleted=todayAppointments.filter(a=>a.status==="completed");
-
-      const futureWaiting=mine
-        .filter(a=>a.appointment_date>today && ["pending","awaiting_confirmation"].includes(a.status))
-        .sort((a,b)=>`${a.appointment_date} ${a.start_time||""}`.localeCompare(`${b.appointment_date} ${b.start_time||""}`));
-
       const nextToday=todayAppointments
         .filter(a=>!["completed","cancelled","no_show"].includes(a.status))
         .sort((a,b)=>(a.start_time||"").localeCompare(b.start_time||""))[0];
@@ -1483,60 +1483,51 @@ Gostaria de confirmar meu agendamento.`;
         <div class="panel-content-head">
           <div>
             <h2>Agenda de hoje — ${formatDateWithWeekday(today)}</h2>
-            <p class="muted">Ao entrar, veja primeiro tudo o que precisa ser atendido hoje.</p>
+            <p class="muted">Veja os horários de hoje e confirme também os próximos agendamentos.</p>
           </div>
           <button id="openFullAgenda" class="btn btn-light">📅 Ver agenda completa</button>
         </div>
 
         <div class="stats-grid">
+          <div class="stat"><small>Aguardando confirmação</small><strong>${waitingAll.length}</strong></div>
           <div class="stat"><small>Confirmados hoje</small><strong>${todayConfirmed.length}</strong></div>
-          <div class="stat"><small>Aguardando hoje</small><strong>${todayWaiting.length}</strong></div>
           <div class="stat"><small>Realizados hoje</small><strong>${todayCompleted.length}</strong></div>
           <div class="stat"><small>Próximo atendimento</small><strong style="font-size:18px">${nextToday?(nextToday.start_time||"").slice(0,5)+" • "+escapeHtml(nextToday.client_name):"—"}</strong></div>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>✅ Horários confirmados de hoje</h3>
-          <p class="muted">Clientes que já confirmaram e precisam ser atendidos hoje.</p>
-          <div id="todayConfirmedList" class="list"></div>
+          <h3>🔔 Aguardando confirmação</h3>
+          <p class="muted">Aqui aparecem os agendamentos de hoje e dos próximos dias que ainda precisam ser confirmados.</p>
+          <div id="waitingAllList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3>🔔 Aguardando confirmação hoje</h3>
-          <div id="todayWaitingList" class="list"></div>
+          <h3>✅ Horários confirmados de hoje</h3>
+          <p class="muted">Clientes confirmados que precisam ser atendidos hoje.</p>
+          <div id="todayConfirmedList" class="list"></div>
         </div>
 
         <div class="card" style="margin-top:16px">
           <h3>📋 Todos os horários de hoje</h3>
           <div id="todayAllList" class="list"></div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
-          <h3>📆 Próximos agendamentos aguardando confirmação</h3>
-          <p class="muted">Horários de amanhã em diante que ainda precisam ser confirmados.</p>
-          <div id="futureWaitingList" class="list"></div>
         </div>`;
+
+      const waitingList=document.getElementById("waitingAllList");
+      waitingAll.forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
+      if(!waitingAll.length) waitingList.innerHTML=`<div class="empty">Nenhum agendamento aguardando confirmação.</div>`;
 
       const confirmedList=document.getElementById("todayConfirmedList");
       todayConfirmed.forEach(a=>confirmedList.appendChild(appointmentItem(a,adminMode)));
       if(!todayConfirmed.length) confirmedList.innerHTML=`<div class="empty">Nenhum horário confirmado para hoje.</div>`;
 
-      const waitingList=document.getElementById("todayWaitingList");
-      todayWaiting.forEach(a=>waitingList.appendChild(appointmentItem(a,adminMode)));
-      if(!todayWaiting.length) waitingList.innerHTML=`<div class="empty">Nenhum horário aguardando confirmação hoje.</div>`;
-
       const allList=document.getElementById("todayAllList");
       todayAppointments.forEach(a=>allList.appendChild(appointmentItem(a,adminMode)));
       if(!todayAppointments.length) allList.innerHTML=`<div class="empty">Nenhum atendimento marcado para hoje.</div>`;
 
-      const futureList=document.getElementById("futureWaitingList");
-      futureWaiting.forEach(a=>futureList.appendChild(appointmentItem(a,adminMode)));
-      if(!futureWaiting.length) futureList.innerHTML=`<div class="empty">Nenhum agendamento futuro aguardando confirmação.</div>`;
-
       document.getElementById("openFullAgenda")?.addEventListener("click",()=>renderAgenda(adminMode));
     }catch(e){
       console.error(e);
-      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar a agenda de hoje.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
+      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar a agenda.</strong><br><span class="muted">${escapeHtml(e?.message||"Erro desconhecido")}</span></div>`;
     }
   }
   async function renderAgenda(adminMode){
