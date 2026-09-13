@@ -754,7 +754,7 @@ Gostaria de confirmar meu agendamento.`;
   }
 
   async function fetchAppointments(){
-    const { data, error } = await supabase.rpc("list_my_team_appointments");
+    const { data, error } = await supabase.rpc("list_dashboard_appointments");
     if(error) throw error;
     return (data || []).sort((a,b)=>{
       const da=`${a.appointment_date||""} ${a.start_time||""}`;
@@ -1047,511 +1047,55 @@ Gostaria de confirmar meu agendamento.`;
   }
 
   async function renderEarnings(adminMode=false){
-    panelContent.className = "panel-content active";
-    panelContent.innerHTML = `<div class="loading">Carregando...</div>`;
+    panelContent.className="panel-content active";
+    panelContent.innerHTML=`<div class="loading">Carregando financeiro...</div>`;
     try{
-      const appointments = await fetchAppointments();
-      const completed = appointments.filter(a => a.status === "completed");
-      const today = new Date();
-      const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}`;
-      const month = completed.filter(a => a.appointment_date?.startsWith(ym));
-      const monthTotal = month.reduce((sum,a) => sum + Number(a.price_charged || 0),0);
-      const allTotal = completed.reduce((sum,a) => sum + Number(a.price_charged || 0),0);
-      panelContent.innerHTML = `
-        <div class="panel-content-head"><div><h2>${adminMode ? "Financeiro" : "Meus ganhos"}</h2><p class="muted">Baseado nos atendimentos marcados como concluídos.</p></div></div>
+      const {data,error}=await supabase.rpc("list_financial_entries");
+      if(error) throw error;
+      const rows=data||[];
+      const paid=rows.filter(r=>r.entry_status==="paid");
+      const pending=rows.filter(r=>r.entry_status==="pending");
+      const courtesy=rows.filter(r=>r.entry_status==="courtesy");
+      const totalPaid=paid.reduce((s,r)=>s+Number(r.amount||0),0);
+
+      panelContent.innerHTML=`
+        <div class="panel-content-head">
+          <div>
+            <h2>${adminMode?"Financeiro":"Meus resultados"}</h2>
+            <p class="muted">Todo atendimento concluído entra automaticamente aqui.</p>
+          </div>
+        </div>
         <div class="stats-grid">
-          <div class="stat"><small>Concluídos no mês</small><strong>${month.length}</strong></div>
-          <div class="stat"><small>Total do mês</small><strong>${money(monthTotal)}</strong></div>
-          <div class="stat"><small>Total concluído</small><strong>${money(allTotal)}</strong></div>
+          <div class="stat"><small>Recebido</small><strong>${money(totalPaid)}</strong></div>
+          <div class="stat"><small>Pagos</small><strong>${paid.length}</strong></div>
+          <div class="stat"><small>Pendentes</small><strong>${pending.length}</strong></div>
+          <div class="stat"><small>Cortesias</small><strong>${courtesy.length}</strong></div>
+        </div>
+        <div class="card" style="margin-top:16px;overflow:auto">
+          <h3>💰 Lançamentos financeiros</h3>
+          <table class="mini-table" style="min-width:850px;width:100%">
+            <thead><tr>
+              <th>Data</th><th>Cliente</th><th>Barbeiro</th><th>Serviço</th>
+              <th>Pagamento</th><th>Status</th><th>Valor</th>
+            </tr></thead>
+            <tbody id="financeRows"></tbody>
+          </table>
         </div>`;
-    }catch(error){
-      console.error(error);
-      panelContent.innerHTML = `<div class="empty">Não foi possível carregar os dados financeiros.</div>`;
-    }
-  }
 
-  function promoDayChecks(prefix, selectedDays = []){
-    const selected = new Set((selectedDays || []).map(Number));
-    return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">` +
-      [[1,"Seg"],[2,"Ter"],[3,"Qua"],[4,"Qui"],[5,"Sex"],[6,"Sáb"],[7,"Dom"]].map(([v,l]) =>
-        `<label style="margin:0;display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600">
-          <input type="checkbox" class="${prefix}-promo-day" value="${v}" ${selected.has(v) ? "checked" : ""} style="width:auto;min-height:auto">${l}
-        </label>`).join("") + `</div>`;
-  }
-
-  async function renderAdminServices(){
-    panelContent.className = "panel-content active";
-    panelContent.innerHTML = `<div class="loading">Carregando serviços...</div>`;
-    try{
-      let out = `<div class="panel-content-head"><div><h2>Serviços e promoções</h2><p class="muted">Gerencie os serviços de cada barbeiro, inclusive promoções.</p></div></div>`;
-      for(const barber of barbers){
-        const { data, error } = await supabase.rpc("list_barber_services",{p_barber_id:Number(barber.id)});
-        if(error) throw error;
-        out += `<div class="list-item" style="margin-bottom:16px">
-          <h3>${escapeHtml(barber.name)}</h3>
-          <div class="list-item" style="background:#fafafa">
-            <h4>Adicionar serviço para ${escapeHtml(barber.name)}</h4>
-            <div class="form-grid">
-              <div><label>Nome</label><input id="adm-new-name-${barber.id}" placeholder="Ex.: Corte Navalhado"></div>
-              <div><label>Descrição</label><input id="adm-new-desc-${barber.id}" placeholder="Opcional"></div>
-              <div><label>Preço normal</label><input id="adm-new-price-${barber.id}" type="number" min="0" step="0.01"></div>
-              <div><label>Duração (min)</label><input id="adm-new-duration-${barber.id}" type="number" min="5" step="5" value="30"></div>
-              <div><label style="display:flex;gap:8px;align-items:center"><input id="adm-new-promo-active-${barber.id}" type="checkbox" style="width:auto;min-height:auto"> Promoção ativa</label></div>
-              <div><label>Preço promocional</label><input id="adm-new-promo-price-${barber.id}" type="number" min="0" step="0.01"></div>
-              <div class="full"><label>Dias da promoção</label>${promoDayChecks(`adm-new-${barber.id}`,[1,3])}</div>
-            </div>
-            <button class="btn btn-dark" data-add-admin-service="${barber.id}">Adicionar serviço</button>
-          </div>
-          <div id="adm-services-${barber.id}" class="list" style="margin-top:12px"></div>
-        </div>`;
-      }
-      panelContent.innerHTML = out;
-
-      for(const barber of barbers){
-        const { data } = await supabase.rpc("list_barber_services",{p_barber_id:Number(barber.id)});
-        const list = document.getElementById(`adm-services-${barber.id}`);
-        (data || []).forEach(s=>{
-          const item = document.createElement("div");
-          item.className = "list-item";
-          item.innerHTML = `
-            <div class="form-grid">
-              <div><label>Nome</label><input class="adm-s-name" value="${escapeHtml(s.service_name)}"></div>
-              <div><label>Descrição</label><input class="adm-s-desc" value="${escapeHtml(s.description || "")}"></div>
-              <div><label>Preço normal</label><input class="adm-s-price" type="number" min="0" step="0.01" value="${Number(s.price || 0)}"></div>
-              <div><label>Duração</label><input class="adm-s-duration" type="number" min="5" step="5" value="${Number(s.duration_minutes || 30)}"></div>
-              <div><label style="display:flex;gap:8px;align-items:center"><input class="adm-s-promo-active" type="checkbox" ${s.promotion_active ? "checked" : ""} style="width:auto;min-height:auto"> Promoção ativa</label></div>
-              <div><label>Preço promocional</label><input class="adm-s-promo-price" type="number" min="0" step="0.01" value="${s.promotional_price == null ? "" : Number(s.promotional_price)}"></div>
-              <div class="full"><label>Dias da promoção</label>${promoDayChecks(`adm-s-${s.id}`,s.promotion_days || [])}</div>
-            </div>
-            <div class="action-row">
-              <button class="btn-small btn-light adm-save">Salvar</button>
-              <button class="btn-small btn-danger adm-remove">Retirar serviço</button>
-            </div>`;
-          item.querySelector(".adm-save").addEventListener("click",async()=>{
-            const promotionActive = item.querySelector(".adm-s-promo-active").checked;
-            const rawPromo = item.querySelector(".adm-s-promo-price").value;
-            const promoPrice = rawPromo === "" ? null : Number(rawPromo);
-            const days = [...item.querySelectorAll(`.adm-s-${s.id}-promo-day:checked`)].map(x=>Number(x.value));
-            const {error} = await supabase.rpc("admin_update_barber_service",{
-              p_barber_service_id:Number(s.id),
-              p_name:item.querySelector(".adm-s-name").value.trim(),
-              p_description:item.querySelector(".adm-s-desc").value.trim() || null,
-              p_price:Number(item.querySelector(".adm-s-price").value),
-              p_duration_minutes:Number(item.querySelector(".adm-s-duration").value),
-              p_active:true,
-              p_promotion_active:promotionActive,
-              p_promotional_price:promotionActive ? promoPrice : null,
-              p_promotion_days:promotionActive ? days : []
-            });
-            if(error){console.error(error);alert("Não foi possível salvar.");return}
-            alert("Serviço atualizado.");
-            await renderAdminServices();
-          });
-          item.querySelector(".adm-remove").addEventListener("click",async()=>{
-            if(!confirm(`Retirar "${s.service_name}" de ${barber.name}?`)) return;
-            const {error} = await supabase.rpc("admin_remove_barber_service",{p_barber_service_id:Number(s.id)});
-            if(error){console.error(error);alert("Não foi possível retirar.");return}
-            await renderAdminServices();
-          });
-          list.appendChild(item);
-        });
-      }
-
-      panelContent.querySelectorAll("[data-add-admin-service]").forEach(btn=>{
-        btn.addEventListener("click",async()=>{
-          const barberId = Number(btn.dataset.addAdminService);
-          const active = document.getElementById(`adm-new-promo-active-${barberId}`).checked;
-          const rawPromo = document.getElementById(`adm-new-promo-price-${barberId}`).value;
-          const promo = rawPromo === "" ? null : Number(rawPromo);
-          const days = [...panelContent.querySelectorAll(`.adm-new-${barberId}-promo-day:checked`)].map(x=>Number(x.value));
-          const {error} = await supabase.rpc("admin_add_barber_service",{
-            p_barber_id:barberId,
-            p_name:document.getElementById(`adm-new-name-${barberId}`).value.trim(),
-            p_description:document.getElementById(`adm-new-desc-${barberId}`).value.trim() || null,
-            p_price:Number(document.getElementById(`adm-new-price-${barberId}`).value),
-            p_duration_minutes:Number(document.getElementById(`adm-new-duration-${barberId}`).value),
-            p_promotion_active:active,
-            p_promotional_price:active ? promo : null,
-            p_promotion_days:active ? days : []
-          });
-          if(error){console.error(error);alert("Não foi possível adicionar.");return}
-          await renderAdminServices();
-        });
-      });
-    }catch(error){
-      console.error(error);
-      panelContent.innerHTML = `<div class="empty">Não foi possível carregar os serviços. Execute primeiro o SQL atualizado.</div>`;
-    }
-  }
-
-
-  async function renderPublicCatalog(){
-    const productsEl = document.getElementById("publicProducts");
-    const packagesEl = document.getElementById("publicPackages");
-    const promosEl = document.getElementById("publicPromotions");
-
-    try{
-      const {data:products,error} = await supabase.from("products")
-        .select("id,name,description,price,stock,image_path,active")
-        .eq("active",true).order("created_at",{ascending:false});
-      if(error) throw error;
-      productsEl.innerHTML = products?.length ? products.map(p=>{
-        const url = p.image_path ? supabase.storage.from("product-images").getPublicUrl(p.image_path).data.publicUrl : "";
-        return `<div class="product-card">${url ? `<img src="${url}" alt="${escapeHtml(p.name)}">` : ""}
-          <div class="body"><h3>${escapeHtml(p.name)}</h3><p class="muted">${escapeHtml(p.description || "")}</p>
-          <div class="price">${money(p.price)}</div>${p.stock > 0 ? `<span class="pill green">${p.stock} em estoque</span>` : `<span class="pill red">Consulte disponibilidade</span>`}</div></div>`;
-      }).join("") : `<div class="empty">Nenhum produto disponível no momento.</div>`;
+      const body=document.getElementById("financeRows");
+      body.innerHTML=rows.map(r=>`<tr>
+        <td>${escapeHtml(formatDate(r.appointment_date))}</td>
+        <td>${escapeHtml(r.client_name||"—")}</td>
+        <td>${escapeHtml(r.barber_name||"—")}</td>
+        <td>${escapeHtml(r.service_name||"—")}</td>
+        <td>${escapeHtml(paymentLabel(r.payment_method))}</td>
+        <td>${r.entry_status==="paid"?"✅ Pago":r.entry_status==="courtesy"?"🎁 Cortesia":"⏳ Pendente"}</td>
+        <td><strong>${money(r.amount||0)}</strong></td>
+      </tr>`).join("")||`<tr><td colspan="7">Nenhum lançamento financeiro ainda.</td></tr>`;
     }catch(e){
-      productsEl.innerHTML = `<div class="empty">Produtos serão exibidos aqui após a atualização do sistema.</div>`;
+      console.error(e);
+      panelContent.innerHTML=`<div class="empty"><strong>Não foi possível carregar o financeiro.</strong><br>${escapeHtml(e?.message||"")}</div>`;
     }
-
-    try{
-      const {data:packages,error} = await supabase.from("packages")
-        .select("id,name,description,price,service_count,validity_days,barber_id,active")
-        .eq("active",true).order("created_at",{ascending:false});
-      if(error) throw error;
-      packagesEl.innerHTML = packages?.length ? packages.map(p=>{
-        const b = barbers.find(x=>Number(x.id)===Number(p.barber_id));
-        return `<div class="product-card"><div class="body"><h3>${escapeHtml(p.name)}</h3>
-          <p class="muted">${escapeHtml(p.description || "")}</p><div class="price">${money(p.price)}</div>
-          <p style="margin-top:8px"><strong>${Number(p.service_count)} atendimento(s)</strong> • validade ${Number(p.validity_days)} dias</p>
-          <p class="muted">${b ? `Com ${escapeHtml(b.name)}` : "Válido com os barbeiros participantes"}</p></div></div>`;
-      }).join("") : `<div class="empty">Nenhum pacote ativo no momento.</div>`;
-    }catch(e){
-      packagesEl.innerHTML = `<div class="empty">Pacotes serão exibidos aqui após a atualização do sistema.</div>`;
-    }
-
-    try{
-      const cards = [];
-      for(const barber of barbers){
-        const {data} = await supabase.rpc("list_barber_services",{p_barber_id:Number(barber.id)});
-        (data || []).filter(s=>s.promotion_active && s.promotional_price != null).forEach(s=>{
-          cards.push(`<div class="product-card"><div class="body"><span class="pill green">PROMOÇÃO</span>
-            <h3 style="margin-top:10px">${escapeHtml(s.service_name)}</h3><p class="muted">Com ${escapeHtml(barber.name)}</p>
-            <div class="price">${money(s.promotional_price)}</div><p class="muted">De ${money(s.price)} • ${escapeHtml(promoDaysLabel(s))}</p></div></div>`);
-        });
-      }
-      promosEl.innerHTML = cards.length ? cards.join("") : `<div class="empty">Nenhuma promoção ativa no momento.</div>`;
-    }catch(e){
-      promosEl.innerHTML = `<div class="empty">Promoções serão exibidas aqui.</div>`;
-    }
-  }
-
-  async function callManageBarberUser(payload){
-    const {data:{session}} = await supabase.auth.getSession();
-    if(!session) throw new Error("Sessão expirada. Entre novamente.");
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-barber-user`,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "Authorization":`Bearer ${session.access_token}`
-      },
-      body:JSON.stringify(payload)
-    });
-    const body = await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(body.error || "Não foi possível concluir a operação.");
-    return body;
-  }
-
-  async function renderAdminBarbers(){
-    panelContent.className = "panel-content active";
-    panelContent.innerHTML = `
-      <div class="panel-content-head">
-        <div><h2>Barbeiros</h2><p class="muted">Cadastre profissionais, ative/desative acessos e altere senhas.</p></div>
-      </div>
-
-      <div class="list-item" style="margin-bottom:16px">
-        <h3>Cadastrar barbeiro</h3>
-        <div class="form-grid">
-          <div><label>Nome</label><input id="newBarberName"></div>
-          <div><label>WhatsApp</label><input id="newBarberPhone" placeholder="44999999999"></div>
-          <div><label>E-mail de acesso</label><input id="newBarberEmail" type="email"></div>
-          <div><label>Senha provisória</label><input id="newBarberPassword" type="password" minlength="6"></div>
-        </div>
-        <button id="createBarberBtn" class="btn btn-dark">Cadastrar barbeiro</button>
-        <div class="note" style="margin-top:10px">O barbeiro poderá usar “Esqueci minha senha” para receber a recuperação diretamente no e-mail.</div>
-      </div>
-
-      <div id="barberAdminList" class="list"><div class="loading">Carregando equipe...</div></div>`;
-
-    async function reloadBarbersAdmin(){
-      const list = document.getElementById("barberAdminList");
-      const {data,error} = await supabase.rpc("admin_list_barbers");
-      if(error){
-        console.error(error);
-        list.innerHTML = `<div class="empty">Execute o SQL complementar de senhas e acessos.</div>`;
-        return;
-      }
-      list.innerHTML = "";
-      (data || []).forEach(b=>{
-        const item = document.createElement("div");
-        item.className = "list-item";
-        item.innerHTML = `
-          <strong>${escapeHtml(b.name)}</strong>
-          <div class="muted">WhatsApp: ${escapeHtml(b.phone || "—")}</div>
-          <div class="muted">E-mail: ${escapeHtml(b.email || "Não informado")}</div>
-          <div><span class="pill ${b.active ? "green":"red"}">${b.active ? "ATIVO":"DESATIVADO"}</span></div>
-          <div class="action-row">
-            <button class="btn-small ${b.active ? "btn-danger":"btn-light"} toggle-barber">${b.active ? "Desativar barbeiro":"Ativar barbeiro"}</button>
-            ${b.auth_user_id ? `<button class="btn-small btn-light change-password">Alterar senha</button>` : `<span class="pill">Login ainda não criado</span>`}
-          </div>`;
-        item.querySelector(".toggle-barber").addEventListener("click",async()=>{
-          const action = b.active ? "desativar" : "ativar";
-          if(!confirm(`Deseja ${action} o acesso de ${b.name}?`)) return;
-          const {error:e} = await supabase.rpc("admin_set_barber_active",{
-            p_barber_id:Number(b.id),
-            p_active:!b.active
-          });
-          if(e){console.error(e);alert("Não foi possível alterar o acesso.");return}
-          await loadBarbers();
-          await reloadBarbersAdmin();
-          await renderPublicCatalog();
-        });
-        const passBtn = item.querySelector(".change-password");
-        if(passBtn){
-          passBtn.addEventListener("click",async()=>{
-            const p1 = prompt(`Digite a nova senha de ${b.name} (mínimo 6 caracteres):`);
-            if(p1 === null) return;
-            if(p1.length < 6){alert("A senha precisa ter pelo menos 6 caracteres.");return}
-            const p2 = prompt("Digite a nova senha novamente:");
-            if(p2 !== p1){alert("As senhas não coincidem.");return}
-            try{
-              await callManageBarberUser({action:"set_password",barber_id:Number(b.id),password:p1});
-              alert("Senha alterada com sucesso.");
-            }catch(err){
-              console.error(err); alert(err.message);
-            }
-          });
-        }
-        list.appendChild(item);
-      });
-      if(!(data || []).length) list.innerHTML = `<div class="empty">Nenhum barbeiro cadastrado.</div>`;
-    }
-
-    document.getElementById("createBarberBtn").addEventListener("click",async()=>{
-      const body = {
-        action:"create",
-        name:document.getElementById("newBarberName").value.trim(),
-        phone:normalizePhone(document.getElementById("newBarberPhone").value),
-        email:document.getElementById("newBarberEmail").value.trim(),
-        password:document.getElementById("newBarberPassword").value
-      };
-      if(!body.name || !body.phone || !body.email || body.password.length < 6){
-        alert("Preencha nome, WhatsApp, e-mail e uma senha com pelo menos 6 caracteres.");
-        return;
-      }
-      try{
-        await callManageBarberUser(body);
-        alert("Barbeiro e login cadastrados com sucesso.");
-        await loadBarbers();
-        await reloadBarbersAdmin();
-        await renderPublicCatalog();
-      }catch(err){
-        console.error(err); alert(err.message);
-      }
-    });
-
-    await reloadBarbersAdmin();
-  }
-
-  async function renderScheduleBlocks(adminMode=false){
-    panelContent.className = "panel-content active";
-    const barberOptions = adminMode ? `<div><label>Barbeiro</label><select id="blockBarber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>` : "";
-    panelContent.innerHTML = `
-      <div class="panel-content-head"><div><h2>Bloquear horários</h2><p class="muted">Horários bloqueados deixam de aparecer para novos agendamentos.</p></div></div>
-      <div class="list-item">
-        <div class="form-grid">${barberOptions}
-          <div><label>Data</label><input id="blockDate" type="date"></div>
-          <div><label>Início</label><input id="blockStart" type="time"></div>
-          <div><label>Fim</label><input id="blockEnd" type="time"></div>
-          <div class="full"><label>Motivo</label><input id="blockReason" placeholder="Ex.: almoço, compromisso, folga"></div>
-        </div>
-        <button id="createBlockBtn" class="btn btn-dark">Bloquear período</button>
-      </div>
-      <div id="blocksList" class="list" style="margin-top:14px"><div class="loading">Carregando...</div></div>`;
-
-    const barberId = adminMode ? null : Number(currentProfile.barber_id);
-    async function reload(){
-      let q = supabase.from("schedule_blocks").select("*").gte("block_date",new Date().toISOString().slice(0,10)).order("block_date").order("start_time");
-      if(barberId) q = q.eq("barber_id",barberId);
-      const {data,error} = await q;
-      const list = document.getElementById("blocksList");
-      if(error){console.error(error);list.innerHTML=`<div class="empty">Execute o SQL atualizado para ativar os bloqueios.</div>`;return}
-      list.innerHTML = "";
-      (data || []).forEach(b=>{
-        const barber = barbers.find(x=>Number(x.id)===Number(b.barber_id));
-        const item=document.createElement("div");item.className="list-item";
-        item.innerHTML=`<strong>${formatDate(b.block_date)} • ${(b.start_time||"").slice(0,5)} às ${(b.end_time||"").slice(0,5)}</strong>
-          ${adminMode?`<div class="muted">Barbeiro: ${escapeHtml(barber?.name||"—")}</div>`:""}
-          <div class="muted">${escapeHtml(b.reason||"Horário indisponível")}</div>
-          <button class="btn-small btn-light">Liberar este horário</button>`;
-        item.querySelector("button").addEventListener("click",async()=>{
-          const {error:e}=await supabase.from("schedule_blocks").delete().eq("id",b.id);
-          if(e){console.error(e);alert("Não foi possível liberar.");return}
-          await reload();
-        });
-        list.appendChild(item);
-      });
-      if(!(data||[]).length) list.innerHTML=`<div class="empty">Nenhum horário bloqueado.</div>`;
-    }
-    document.getElementById("createBlockBtn").addEventListener("click",async()=>{
-      const chosenBarber = adminMode ? Number(document.getElementById("blockBarber").value) : barberId;
-      const payload = {
-        barber_id:chosenBarber, block_date:document.getElementById("blockDate").value,
-        start_time:document.getElementById("blockStart").value, end_time:document.getElementById("blockEnd").value,
-        reason:document.getElementById("blockReason").value.trim() || null
-      };
-      if(!payload.block_date || !payload.start_time || !payload.end_time || payload.end_time <= payload.start_time){alert("Preencha data, início e fim corretamente.");return}
-      const {error}=await supabase.from("schedule_blocks").insert(payload);
-      if(error){console.error(error);alert("Não foi possível bloquear. Execute o SQL atualizado.");return}
-      await reload();
-    });
-    await reload();
-  }
-
-  async function renderClientSearch(adminMode=false){
-    panelContent.className = "panel-content active";
-    panelContent.innerHTML = `
-      <div class="panel-content-head"><div><h2>Clientes e pacotes</h2><p class="muted">Pesquise por nome ou WhatsApp.</p></div></div>
-      <div class="search-row"><div><label>Nome ou WhatsApp</label><input id="clientSearchQuery" placeholder="Ex.: João Silva ou 44999999999"></div>
-      <button id="clientSearchBtn" class="btn btn-dark" style="margin:0">Pesquisar</button></div>
-      <div id="clientSearchResults" style="margin-top:16px"></div>`;
-    document.getElementById("clientSearchBtn").addEventListener("click",async()=>{
-      const q=document.getElementById("clientSearchQuery").value.trim();
-      const result=document.getElementById("clientSearchResults");
-      if(q.length<3){alert("Digite pelo menos 3 caracteres.");return}
-      result.innerHTML=`<div class="loading">Buscando...</div>`;
-      const {data,error}=await supabase.rpc("search_client_history",{p_query:q});
-      if(error){console.error(error);result.innerHTML=`<div class="empty">Não foi possível pesquisar. Execute o SQL atualizado.</div>`;return}
-      if(!data?.length){result.innerHTML=`<div class="empty">Nenhum cliente encontrado.</div>`;return}
-      result.innerHTML=data.map(c=>{
-        const total=Number(c.package_total||0), used=Number(c.package_used||0), remain=Math.max(0,total-used);
-        const pct=total?Math.min(100,(used/total)*100):0;
-        return `<div class="list-item" style="margin-bottom:12px">
-          <strong>${escapeHtml(c.client_name)}</strong><div class="muted">WhatsApp: ${escapeHtml(c.client_phone||"—")}</div>
-          <div>Último agendamento: <strong>${c.last_appointment_date ? formatDateTime(c.last_appointment_date,c.last_start_time) : "—"}</strong></div>
-          <div>Último valor: <strong>${money(c.last_price||0)}</strong> ${c.last_was_package ? '<span class="pill green">PACOTE</span>' : '<span class="pill">AVULSO</span>'}</div>
-          ${c.package_name ? `<div style="margin-top:8px"><strong>Pacote ativo: ${escapeHtml(c.package_name)}</strong><div>${used} utilizado(s) • ${remain} restante(s) de ${total}</div>
-             <div class="package-progress"><div style="width:${pct}%"></div></div>
-             <div class="muted">Validade: ${c.package_expires_at ? formatDate(String(c.package_expires_at).slice(0,10)) : "—"}</div></div>` : `<div class="muted">Sem pacote ativo.</div>`}
-          <div class="action-row">
-            ${c.client_package_id ? `<button class="btn-small btn-light use-package" data-id="${c.client_package_id}">Registrar 1 uso do pacote</button>` : ""}
-            ${adminMode ? `<button class="btn-small btn-light assign-package" data-name="${escapeHtml(c.client_name)}" data-phone="${escapeHtml(c.client_phone)}">Vincular pacote</button>` : ""}
-          </div>
-        </div>`;
-      }).join("");
-      result.querySelectorAll(".use-package").forEach(btn=>btn.addEventListener("click",async()=>{
-        if(!confirm("Registrar 1 atendimento utilizado deste pacote?")) return;
-        const {error:e}=await supabase.rpc("use_client_package",{p_client_package_id:Number(btn.dataset.id)});
-        if(e){console.error(e);alert("Não foi possível registrar o uso.");return}
-        document.getElementById("clientSearchBtn").click();
-      }));
-      result.querySelectorAll(".assign-package").forEach(btn=>btn.addEventListener("click",()=>renderAssignPackage(btn.dataset.name,btn.dataset.phone)));
-    });
-  }
-
-  async function renderAssignPackage(clientName,clientPhone){
-    const {data:packages,error}=await supabase.from("packages").select("id,name,price,service_count,validity_days").eq("active",true);
-    if(error || !packages?.length){alert("Cadastre um pacote ativo primeiro.");return}
-    panelContent.innerHTML=`
-      <div class="panel-content-head"><div><h2>Vincular pacote</h2><p class="muted">${escapeHtml(clientName)} • ${escapeHtml(clientPhone)}</p></div></div>
-      <label>Pacote</label><select id="assignPackageSelect">${packages.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} • ${money(p.price)} • ${p.service_count} atendimento(s)</option>`).join("")}</select>
-      <button id="assignPackageBtn" class="btn btn-dark">Vincular pacote ao cliente</button>`;
-    document.getElementById("assignPackageBtn").addEventListener("click",async()=>{
-      const {error:e}=await supabase.rpc("assign_client_package",{p_client_name:clientName,p_client_phone:clientPhone,p_package_id:Number(document.getElementById("assignPackageSelect").value)});
-      if(e){console.error(e);alert("Não foi possível vincular.");return}
-      alert("Pacote vinculado.");
-      await renderClientSearch(true);
-    });
-  }
-
-  async function renderAdminPackages(){
-    panelContent.className="panel-content active";
-    panelContent.innerHTML=`
-      <div class="panel-content-head"><div><h2>Pacotes mensais</h2><p class="muted">Crie pacotes e controle quantidade de atendimentos e validade.</p></div></div>
-      <div class="list-item">
-        <div class="form-grid">
-          <div><label>Nome do pacote</label><input id="pkgName" placeholder="Ex.: Plano 4 Cortes"></div>
-          <div><label>Preço</label><input id="pkgPrice" type="number" min="0" step="0.01"></div>
-          <div><label>Quantidade de atendimentos</label><input id="pkgCount" type="number" min="1" value="4"></div>
-          <div><label>Validade (dias)</label><input id="pkgValidity" type="number" min="1" value="30"></div>
-          <div><label>Barbeiro</label><select id="pkgBarber"><option value="">Todos / geral</option>${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("")}</select></div>
-          <div class="full"><label>Descrição</label><input id="pkgDesc" placeholder="O que está incluído"></div>
-        </div>
-        <button id="addPackageBtn" class="btn btn-dark">Cadastrar pacote</button>
-      </div>
-      <div id="packagesAdminList" class="list" style="margin-top:14px"></div>`;
-    async function reload(){
-      const {data,error}=await supabase.from("packages").select("*").order("created_at",{ascending:false});
-      const list=document.getElementById("packagesAdminList");
-      if(error){console.error(error);list.innerHTML=`<div class="empty">Execute o SQL atualizado para ativar pacotes.</div>`;return}
-      list.innerHTML=(data||[]).map(p=>`<div class="list-item">
-        <strong>${escapeHtml(p.name)}</strong><div>${money(p.price)} • ${p.service_count} atendimento(s) • ${p.validity_days} dias</div>
-        <div class="muted">${escapeHtml(p.description||"")} ${p.barber_id ? `• ${escapeHtml(barbers.find(b=>Number(b.id)===Number(p.barber_id))?.name||"")}` : "• Geral"}</div>
-        <div class="action-row"><button class="btn-small btn-light toggle-pkg" data-id="${p.id}" data-active="${p.active}">${p.active?"Desativar":"Ativar"}</button></div>
-      </div>`).join("") || `<div class="empty">Nenhum pacote cadastrado.</div>`;
-      list.querySelectorAll(".toggle-pkg").forEach(btn=>btn.addEventListener("click",async()=>{
-        const {error:e}=await supabase.from("packages").update({active:btn.dataset.active!=="true"}).eq("id",Number(btn.dataset.id));
-        if(e){alert("Não foi possível alterar.");return} await reload(); await renderPublicCatalog();
-      }));
-    }
-    document.getElementById("addPackageBtn").addEventListener("click",async()=>{
-      const payload={name:document.getElementById("pkgName").value.trim(),description:document.getElementById("pkgDesc").value.trim()||null,
-        price:Number(document.getElementById("pkgPrice").value),service_count:Number(document.getElementById("pkgCount").value),
-        validity_days:Number(document.getElementById("pkgValidity").value),barber_id:document.getElementById("pkgBarber").value?Number(document.getElementById("pkgBarber").value):null,active:true};
-      if(!payload.name || payload.price<0 || payload.service_count<1 || payload.validity_days<1){alert("Preencha os dados corretamente.");return}
-      const {error}=await supabase.from("packages").insert(payload); if(error){console.error(error);alert("Não foi possível cadastrar.");return}
-      await reload(); await renderPublicCatalog();
-    });
-    await reload();
-  }
-
-  async function renderAdminProducts(){
-    panelContent.className="panel-content active";
-    panelContent.innerHTML=`
-      <div class="panel-content-head"><div><h2>Produtos</h2><p class="muted">Cadastre produtos com foto, nome, preço, descrição e estoque.</p></div></div>
-      <div class="list-item">
-        <div class="form-grid">
-          <div><label>Nome</label><input id="prodName"></div>
-          <div><label>Preço</label><input id="prodPrice" type="number" min="0" step="0.01"></div>
-          <div><label>Estoque</label><input id="prodStock" type="number" min="0" value="0"></div>
-          <div><label>Foto</label><input id="prodImage" type="file" accept="image/*"></div>
-          <div class="full"><label>Descrição</label><textarea id="prodDesc"></textarea></div>
-        </div>
-        <button id="addProductBtn" class="btn btn-dark">Cadastrar produto</button>
-      </div>
-      <div id="productsAdminList" class="product-grid" style="margin-top:14px"></div>`;
-    async function reload(){
-      const {data,error}=await supabase.from("products").select("*").order("created_at",{ascending:false});
-      const list=document.getElementById("productsAdminList");
-      if(error){console.error(error);list.innerHTML=`<div class="empty">Execute o SQL atualizado para ativar produtos.</div>`;return}
-      list.innerHTML=(data||[]).map(p=>{
-        const url=p.image_path?supabase.storage.from("product-images").getPublicUrl(p.image_path).data.publicUrl:"";
-        return `<div class="product-card">${url?`<img src="${url}" alt="${escapeHtml(p.name)}">`:""}<div class="body"><h3>${escapeHtml(p.name)}</h3>
-          <p class="muted">${escapeHtml(p.description||"")}</p><div class="price">${money(p.price)}</div><p>Estoque: ${p.stock}</p>
-          <button class="btn-small btn-light toggle-prod" data-id="${p.id}" data-active="${p.active}">${p.active?"Desativar":"Ativar"}</button></div></div>`;
-      }).join("") || `<div class="empty">Nenhum produto cadastrado.</div>`;
-      list.querySelectorAll(".toggle-prod").forEach(btn=>btn.addEventListener("click",async()=>{
-        const {error:e}=await supabase.from("products").update({active:btn.dataset.active!=="true"}).eq("id",Number(btn.dataset.id));
-        if(e){alert("Não foi possível alterar.");return} await reload(); await renderPublicCatalog();
-      }));
-    }
-    document.getElementById("addProductBtn").addEventListener("click",async()=>{
-      const file=document.getElementById("prodImage").files[0]; let imagePath=null;
-      if(file){
-        const ext=(file.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase();
-        imagePath=`${crypto.randomUUID()}.${ext}`;
-        const {error:upErr}=await supabase.storage.from("product-images").upload(imagePath,file,{upsert:false});
-        if(upErr){console.error(upErr);alert("Não foi possível enviar a foto.");return}
-      }
-      const payload={name:document.getElementById("prodName").value.trim(),description:document.getElementById("prodDesc").value.trim()||null,
-        price:Number(document.getElementById("prodPrice").value),stock:Number(document.getElementById("prodStock").value||0),image_path:imagePath,active:true};
-      if(!payload.name || payload.price<0){alert("Informe nome e preço.");return}
-      const {error}=await supabase.from("products").insert(payload);
-      if(error){console.error(error);alert("Não foi possível cadastrar o produto.");return}
-      await reload(); await renderPublicCatalog();
-    });
-    await reload();
   }
 
   async function renderReports(){
@@ -1604,9 +1148,19 @@ Gostaria de confirmar meu agendamento.`;
       text=`Olá, ${a.client_name||"cliente"}! 💈\nSegue a chave Pix para pagamento:\n\n🔑 ${pix}\n\nBarberStylo`;
     }
     if(kind==="confirmation"){
-      try{ await updateAppointmentFields(a.id,{status:"confirmation_sent",confirmation_sent_at:new Date().toISOString()}); a.status="confirmation_sent"; a.confirmation_sent_at=new Date().toISOString(); }catch(e){ console.warn(e); }
+      try{
+        const {error}=await supabase.rpc("confirm_appointment_and_mark_sent",{p_appointment_id:Number(a.id)});
+        if(error) throw error;
+        a.status="confirmation_sent";
+        a.confirmation_sent_at=new Date().toISOString();
+      }catch(e){
+        console.error(e);
+        alert("Não foi possível confirmar este horário antes de abrir o WhatsApp.");
+        return;
+      }
     }
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank");
+    if(kind==="confirmation") setTimeout(()=>renderToday(currentProfile?.role==="admin"),300);
   }
   let finishAppointmentTarget=null;
 
@@ -1642,14 +1196,13 @@ Gostaria de confirmar meu agendamento.`;
     if(!Number.isFinite(paid)||paid<0){alert("Informe um valor válido.");return}
     const courtesyReason=payment==="courtesy"?(document.getElementById("finishCourtesyReason").value.trim()||null):null;
     try{
-      await updateAppointmentFields(a.id,{
-        status:"completed",
-        payment_method:payment,
-        amount_paid:paid,
-        courtesy_reason:courtesyReason,
-        completed_at:new Date().toISOString(),
-        next_return_date:addDays(a.appointment_date,15)
+      const {error}=await supabase.rpc("complete_appointment_and_record_payment",{
+        p_appointment_id:Number(a.id),
+        p_payment_method:payment,
+        p_amount_paid:paid,
+        p_courtesy_reason:courtesyReason
       });
+      if(error) throw error;
       document.getElementById("finishAppointmentDialog").close();
       alert("Atendimento concluído e pagamento registrado.");
       renderToday(currentProfile?.role==="admin");
@@ -1679,12 +1232,12 @@ Gostaria de confirmar meu agendamento.`;
         ${a.status!=="cancelled"&&a.status!=="completed"?`<button class="btn-small btn-danger cancel-service">Cancelar e liberar</button><button class="btn-small btn-danger no-show">Não compareceu</button>`:""}
         ${currentProfile?.pix_enabled&&currentProfile?.pix_key?`<button class="btn-small btn-light send-pix">🔑 Enviar Pix</button>`:""}
       </div>`;
-    div.querySelector(".confirm-only")?.addEventListener("click",async()=>{try{await updateAppointmentFields(a.id,{status:"confirmed",confirmed_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)}catch(e){alert("Não foi possível confirmar.")}});
+    div.querySelector(".confirm-only")?.addEventListener("click",async()=>{try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"confirm"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){console.error(e);alert("Não foi possível confirmar.")}});
     div.querySelector(".confirm-wa")?.addEventListener("click",()=>{ if(a.confirmation_sent_at && !confirm("A confirmação já foi enviada para este cliente. Deseja abrir o WhatsApp novamente?")) return; openClientWhatsapp(a,"confirmation"); });
-    div.querySelector(".start-service")?.addEventListener("click",async()=>{try{await updateAppointmentFields(a.id,{status:"in_service",service_started_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)}catch(e){alert("Não foi possível iniciar.")}});
+    div.querySelector(".start-service")?.addEventListener("click",async()=>{try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"start"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){console.error(e);alert("Não foi possível iniciar.")}});
     div.querySelector(".finish-service")?.addEventListener("click",()=>finalizeAppointment(a));
-    div.querySelector(".cancel-service")?.addEventListener("click",async()=>{if(!confirm("Cancelar e liberar este horário?"))return;await updateAppointmentFields(a.id,{status:"cancelled",cancelled_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)});
-    div.querySelector(".no-show")?.addEventListener("click",async()=>{if(!confirm("Marcar como não compareceu?"))return;await updateAppointmentFields(a.id,{status:"no_show",no_show_at:new Date().toISOString()});currentProfile?.role==="admin"?renderAgenda(true):renderAgenda(false)});
+    div.querySelector(".cancel-service")?.addEventListener("click",async()=>{if(!confirm("Cancelar e liberar este horário?"))return;try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"cancel"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){alert("Não foi possível cancelar.")}});
+    div.querySelector(".no-show")?.addEventListener("click",async()=>{if(!confirm("Marcar como não compareceu?"))return;try{const {error}=await supabase.rpc("set_appointment_action",{p_appointment_id:Number(a.id),p_action:"no_show"});if(error)throw error;renderToday(currentProfile?.role==="admin")}catch(e){alert("Não foi possível marcar a falta.")}});
     div.querySelector(".send-pix")?.addEventListener("click",()=>openClientWhatsapp(a,"pix"));
     return div;
   }
