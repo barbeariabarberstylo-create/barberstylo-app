@@ -1094,7 +1094,7 @@ Gostaria de confirmar meu agendamento.`;
           return;
         }
 
-        const { error:addError } = await supabase.rpc("add_my_barber_service_v2",{
+        const { error:addError } = await supabase.rpc("add_my_barber_service_v3",{
           p_name:name,
           p_description:description || null,
           p_price:price,
@@ -1533,7 +1533,7 @@ Gostaria de confirmar meu agendamento.`;
           <td>
             <div class="action-row">
               <button class="btn-small btn-light finance-edit" data-id="${r.id}">✏️ Alterar</button>
-              <button class="btn-small btn-danger finance-delete" data-id="${r.id}">🗑️ Excluir pagamento</button>
+              <button class="btn-small btn-danger finance-delete" data-id="${r.id}">🗑️ Excluir lançamento</button>
             </div>
           </td>
         </tr>`).join("")||`<tr><td colspan="8">Nenhum lançamento neste período.</td></tr>`;
@@ -1548,11 +1548,11 @@ Gostaria de confirmar meu agendamento.`;
 
         body.querySelectorAll(".finance-delete").forEach(btn=>btn.addEventListener("click",async()=>{
           const r=financeRowsCache.find(x=>String(x.id)===String(btn.dataset.id)); if(!r)return;
-          if(!confirm(`Excluir o pagamento de ${r.client_name}?\n\nO atendimento continuará salvo. O pagamento voltará para PENDENTE.`))return;
+          if(!confirm(`Excluir este lançamento financeiro de ${r.client_name}?\n\nEle será retirado de Meus resultados. O atendimento continuará salvo no histórico do cliente.`))return;
           try{
-            const {error}=await supabase.rpc("delete_financial_payment",{p_financial_id:Number(r.id)});
+            const {error}=await supabase.rpc("delete_financial_entry_permanently",{p_financial_id:Number(r.id)});
             if(error)throw error;
-            alert("Pagamento excluído. O atendimento foi mantido e ficou como pagamento pendente.");
+            alert("Lançamento financeiro excluído.");
             renderEarnings(currentProfile?.role==="admin");
           }catch(e){
             console.error(e);
@@ -1806,7 +1806,7 @@ Te esperamos!
     return div;
   }
 
-  async function renderToday(adminMode=false){
+  async function renderToday(adminMode=false,focusDate=null,focusAppointmentId=null){
     panelContent.className="panel-content active";
     panelContent.innerHTML=`<div class="loading">Carregando agenda visual...</div>`;
 
@@ -1825,8 +1825,17 @@ Te esperamos!
         return isoLocal(d);
       };
 
-      const dayDates=Array.from({length:7},(_,i)=>makeDate(i));
-      let selectedDate=today;
+      let dayDates=Array.from({length:7},(_,i)=>makeDate(i));
+      let selectedDate=focusDate||today;
+
+      if(focusDate && !dayDates.includes(focusDate)){
+        const base=new Date(`${focusDate}T12:00:00`);
+        dayDates=Array.from({length:7},(_,i)=>{
+          const d=new Date(base);
+          d.setDate(base.getDate()+i);
+          return isoLocal(d);
+        });
+      }
 
       let selectedAdminBarber = adminMode
         ? Number(barbers?.[0]?.id||0)
@@ -2259,6 +2268,15 @@ Te esperamos!
       renderTabs();
       await loadSelectedDay();
 
+      if(focusAppointmentId){
+        setTimeout(()=>{
+          document.getElementById(`appt-day-${focusAppointmentId}`)?.scrollIntoView({
+            behavior:"smooth",
+            block:"center"
+          });
+        },150);
+      }
+
       document.getElementById("todayBarberSelect")?.addEventListener("change",async e=>{
         selectedAdminBarber=Number(e.target.value);
         renderTabs();
@@ -2452,11 +2470,10 @@ Te esperamos!
         if(error) throw error;
         manualServices=(data||[]).filter(s=>s.active!==false);
         select.innerHTML=`<option value="">Selecione um procedimento</option>`+
-          manualServices.map(s=>`<option value="${s.id}">${escapeHtml(s.service_name)} • ${money(s.price)}</option>`).join("")+
-          `<option value="other">Outro / escrever manualmente</option>`;
+          manualServices.map(s=>`<option value="${s.id}">${escapeHtml(s.service_name)} • ${money(s.price)}</option>`).join("");
       }catch(e){
         console.error(e);
-        select.innerHTML=`<option value="other">Outro / escrever manualmente</option>`;
+        select.innerHTML=`<option value="">Nenhum serviço disponível</option>`;
       }
     }
 
@@ -2465,7 +2482,7 @@ Te esperamos!
     document.getElementById("manualService").addEventListener("change",()=>{
       const select=document.getElementById("manualService");
       const wrap=document.getElementById("manualOtherServiceWrap");
-      wrap.style.display=select.value==="other"?"block":"none";
+      wrap.style.display="none";
       const service=manualServices.find(s=>String(s.id)===String(select.value));
       if(service){
         document.getElementById("manualCharged").value=Number(service.price||0).toFixed(2);
@@ -2492,11 +2509,12 @@ Te esperamos!
 
       const selected=document.getElementById("manualService").value;
       const service=manualServices.find(s=>String(s.id)===String(selected));
-      const serviceName=selected==="other"
-        ? document.getElementById("manualOtherService").value.trim()
-        : (service?.service_name||"");
+      const serviceName=service?.service_name||"";
 
-      if(!serviceName){alert("Selecione um serviço/procedimento.");return}
+      if(!service || !serviceName){
+        alert("Selecione um serviço cadastrado em Meus serviços.");
+        return;
+      }
 
       const tag=document.getElementById("manualTag").value||null;
       const reasonChoice=document.getElementById("manualTagReasonSelect").value;
@@ -2506,13 +2524,14 @@ Te esperamos!
 
       const payload={
         barber_id:adminMode?Number(document.getElementById("manualBarber").value):Number(currentProfile.barber_id),
+        barber_service_id:Number(service.id),
         client_name:name,
         client_phone:phone,
         service_name:serviceName,
         appointment_date:document.getElementById("manualDate").value,
         start_time:document.getElementById("manualTime").value||"00:00",
-        price_charged:Number(document.getElementById("manualCharged").value||0),
-        amount_paid:document.getElementById("manualPayment").value==="courtesy"?0:Number(document.getElementById("manualPaid").value||0),
+        price_charged:parseMoneyInput(document.getElementById("manualCharged").value||"0")||0,
+        amount_paid:document.getElementById("manualPayment").value==="courtesy"?0:(parseMoneyInput(document.getElementById("manualPaid").value||"0")||0),
         payment_method:document.getElementById("manualPayment").value,
         status:"completed",
         notes:document.getElementById("manualNotes").value.trim()||null,
@@ -2521,7 +2540,7 @@ Te esperamos!
       };
 
       try{
-        const {error}=await supabase.rpc("create_manual_attendance",{
+        const {error}=await supabase.rpc("create_manual_attendance_v2",{
           p_payload:payload,
           p_client_tag:tag,
           p_client_tag_reason:tagReason
@@ -3306,15 +3325,10 @@ Te esperamos!
               <div><label>Fim</label><input id="availabilityEnd" type="time" value="${String(day.end_time||"20:00").slice(0,5)}"></div>
               <div>
                 <label>Espaçamento dos horários</label>
-                <select id="availabilitySlotInterval">
-                  <option value="10" ${Number(day.slot_interval_minutes||30)===10?"selected":""}>De 10 em 10 minutos</option>
-                  <option value="15" ${Number(day.slot_interval_minutes||30)===15?"selected":""}>De 15 em 15 minutos</option>
-                  <option value="20" ${Number(day.slot_interval_minutes||30)===20?"selected":""}>De 20 em 20 minutos</option>
-                  <option value="30" ${Number(day.slot_interval_minutes||30)===30?"selected":""}>De 30 em 30 minutos</option>
-                  <option value="45" ${Number(day.slot_interval_minutes||30)===45?"selected":""}>De 45 em 45 minutos</option>
-                  <option value="60" ${Number(day.slot_interval_minutes||30)===60?"selected":""}>De 1 em 1 hora</option>
-                </select>
-                <div class="muted" style="font-size:12px;margin-top:5px">Define de quanto em quanto tempo aparecem opções para agendamento.</div>
+                <input id="availabilitySlotInterval" type="number" min="5" max="240" step="1"
+                  value="${Number(day.slot_interval_minutes||30)}"
+                  placeholder="Ex.: 10, 15, 25, 30, 40, 60">
+                <div class="muted" style="font-size:12px;margin-top:5px">Digite manualmente o intervalo em minutos, de 5 até 240.</div>
               </div>
               <div>
                 <label>Motivo</label>
@@ -3339,7 +3353,7 @@ Te esperamos!
 
           <div class="card" style="margin-top:16px">
             <h3>📅 Horários de ${formatDateWithWeekday(selectedDate)}</h3><div class="muted" style="margin-bottom:8px">Espaçamento atual: <strong>${Number(day.slot_interval_minutes||30)} minutos</strong></div>
-            <p class="muted">Clique em um horário disponível para bloquear. Clique em um bloqueado para liberar. Ocupados não podem ser alterados.</p>
+            <p class="muted">Clique em um horário disponível para bloquear, em um bloqueado para liberar e em um ocupado para ver o cliente e liberar o agendamento.</p>
             <div id="availabilitySlots" class="slots"></div>
             <div class="note" style="margin-top:12px"><strong>Legenda:</strong> ✅ disponível • 🚫 bloqueado • 👤 ocupado</div>
           </div>`;
@@ -3352,12 +3366,32 @@ Te esperamos!
             const btn=document.createElement("button");
             btn.type="button";
             btn.className="slot";
-            btn.disabled=s.status==="occupied";
+            btn.disabled=false;
             btn.style.background=s.status==="available"?"#fff":s.status==="blocked"?"#fff3f3":"#eee";
             btn.style.borderColor=s.status==="blocked"?"#efc8c8":"#ccc";
-            btn.style.opacity=s.status==="occupied"?"0.65":"1";
-            btn.textContent=`${s.status==="available"?"✅":s.status==="blocked"?"🚫":"👤"} ${String(s.time).slice(0,5)} ${s.status==="available"?"Disponível":s.status==="blocked"?"Bloqueado":"Ocupado"}`;
-            if(s.status!=="occupied"){
+            btn.style.opacity="1";
+
+            const occupiedInfo=s.client_name
+              ? ` • ${s.client_name}${s.appointment_status?` (${statusLabel(s.appointment_status)})`:""}`
+              : "";
+
+            btn.textContent=`${s.status==="available"?"✅":s.status==="blocked"?"🚫":"👤"} ${String(s.time).slice(0,5)} ${s.status==="available"?"Disponível":s.status==="blocked"?"Bloqueado":"Ocupado"}${occupiedInfo}`;
+
+            if(s.status==="occupied" && s.appointment_id){
+              btn.onclick=async()=>{
+                const ok=confirm(
+                  `Esse horário está ocupado por ${s.client_name||"um cliente"}.\n\nDeseja cancelar esse agendamento e liberar o horário?`
+                );
+                if(!ok)return;
+                const {error}=await supabase.rpc("set_appointment_action",{
+                  p_appointment_id:Number(s.appointment_id),
+                  p_action:"cancel"
+                });
+                if(error){alert(error.message||"Não foi possível liberar o horário.");return}
+                alert("Horário liberado.");
+                load();
+              };
+            }else if(s.status!=="occupied"){
               btn.onclick=async()=>{
                 const {error}=await supabase.rpc("set_barber_slot_status",{
                   p_barber_id:barberId,
@@ -3382,7 +3416,7 @@ Te esperamos!
           const end=document.getElementById("availabilityEnd").value||"20:00";
           const slotInterval=Number(document.getElementById("availabilitySlotInterval").value||30);
           if(mode!=="off" && start>=end){alert("O horário final precisa ser depois do horário inicial.");return}
-          if(![10,15,20,30,45,60].includes(slotInterval)){alert("Escolha um espaçamento válido.");return}
+          if(!Number.isInteger(slotInterval) || slotInterval<5 || slotInterval>240){alert("Digite um espaçamento entre 5 e 240 minutos.");return}
 
           const {error}=await supabase.rpc("save_barber_day_availability",{
             p_barber_id:barberId,
@@ -3616,11 +3650,40 @@ Te esperamos!
 
       const list=document.getElementById("notificationsList");
       if(list){
-        list.innerHTML=rows.length?rows.map(n=>`<div class="notification-item ${n.read_at?"":"unread"}">
+        list.innerHTML=rows.length?rows.map(n=>`<button type="button"
+          class="notification-item notification-open ${n.read_at?"":"unread"}"
+          data-appointment-id="${n.appointment_id||""}"
+          style="width:100%;text-align:left;background:${n.read_at?"#fff":"#fffbea"};cursor:${n.appointment_id?"pointer":"default"}">
           <strong>${escapeHtml(n.title||"Notificação")}</strong>
           <div style="margin-top:5px">${escapeHtml(n.message||"")}</div>
-          <small>${escapeHtml(formatNotificationDate(n.created_at))}${n.read_at?" • vista":""}</small>
-        </div>`).join(""):`<div class="empty">Nenhuma notificação.</div>`;
+          <small>${escapeHtml(formatNotificationDate(n.created_at))}${n.read_at?" • vista":" • toque para abrir"}</small>
+        </button>`).join(""):`<div class="empty">Nenhuma notificação.</div>`;
+
+        list.querySelectorAll(".notification-open").forEach(item=>{
+          item.addEventListener("click",async()=>{
+            const appointmentId=Number(item.dataset.appointmentId||0);
+            if(!appointmentId)return;
+
+            try{
+              await supabase.rpc("mark_my_notifications_read");
+            }catch(e){}
+
+            try{
+              document.getElementById("notificationsDialog").close();
+            }catch(e){}
+
+            const {data:appointments,error:appointmentsError}=await supabase.rpc("list_dashboard_appointments");
+            if(appointmentsError){alert("Não foi possível abrir o agendamento.");return}
+
+            const appointment=(appointments||[]).find(a=>Number(a.id)===appointmentId);
+            if(!appointment){
+              alert("Esse agendamento não está mais ativo.");
+              return;
+            }
+
+            await renderToday(false,appointment.appointment_date,appointment.id);
+          });
+        });
       }
       if(showDialog){
         document.getElementById("notificationsDialog").showModal();
